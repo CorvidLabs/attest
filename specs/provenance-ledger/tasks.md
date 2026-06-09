@@ -37,6 +37,14 @@
 - [x] Engine tests: trusted-key pass/fail, untrusted-but-valid signature, tampered signed record, unsigned interaction; pinned correct-key/wrong-key/unsigned/tampered, non-pinned reviewer unaffected, JSON decoding.
 - [x] `examples/07-signer-pinning.sh` and README policy-table rows + "Preventing reviewer spoofing" subsection + spec v5 (Public API / Invariants / Behavioral Examples / Change Log).
 
+## Done (v6)
+
+- [x] `maxAgeDays` freshness policy rule — a commit must carry at least one attestation within `maxAgeDays` whole days of a reference time; stale-only or empty commits fail with a clear detail.
+- [x] Injected clock: `now` parameter threaded through `Verifier.verify`, `Attest.verify`, and `Exporter.report` (defaulted to the current epoch at the CLI boundary) so evaluation never reads `Date()`.
+- [x] Engine tests: fresh pass, stale fail, mixed (newest fresh) pass, not-triggered when nil, boundary (exactly / just over the limit), sub-day, future timestamp, no-attestations, injected-clock determinism, facade path, JSON decoding.
+- [x] Expanded robustness suite (55 → 88 tests): canonical stability/unicode/empty-optionals/slashes, signature edge cases (empty/garbage/non-base64/reused key/invalid-length key), store multi-commit/blank-line/malformed-line/empty-body, exporter empty-range/mixed/aggregation/order/freshness.
+- [x] `docs/` directory (architecture, policy, cli, signing, ci-integration) linked from the README; README policy-table row for `maxAgeDays`; spec v6 (Public API / Invariants / Behavioral Examples / Change Log).
+
 ## Next
 
 - [ ] `attest push` / `attest fetch` wrappers for `refs/notes/attest` syncing.

@@ -222,8 +222,15 @@ public struct Exporter: Sendable {
     ///   - policy: When supplied, each commit is judged against it and the
     ///     report records a per-commit `policyPassed` plus a top-level
     ///     `allPassed`. When `nil`, those fields are omitted.
+    ///   - now: The reference time (Unix epoch seconds) for the policy's
+    ///     `maxAgeDays` freshness rule, injected so the export is deterministic.
+    ///     Defaults to the current epoch and is ignored when no policy is given.
     /// - Returns: A `Codable`, deterministic `AuditReport`.
-    public func report(commits: [String], policy: Policy? = nil) throws -> AuditReport {
+    public func report(
+        commits: [String],
+        policy: Policy? = nil,
+        now: Int = Int(Date().timeIntervalSince1970)
+    ) throws -> AuditReport {
         let verifier = policy.map { Verifier(policy: $0) }
         var auditCommits: [AuditCommit] = []
         var allPassed = true
@@ -235,7 +242,7 @@ public struct Exporter: Sendable {
             }
             var policyPassed: Bool?
             if let verifier {
-                let result = verifier.verify(commits: [(commit: commit, attestations: attestations)])
+                let result = verifier.verify(commits: [(commit: commit, attestations: attestations)], now: now)
                 policyPassed = result.passed
                 if !result.passed { allPassed = false }
             }
