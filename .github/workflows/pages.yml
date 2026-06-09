@@ -46,6 +46,38 @@ jobs:
     runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # need history so attest can read HEAD
+
+      # Produce a shields.io endpoint JSON reflecting attest's own provenance
+      # status for HEAD, BEFORE the Astro build. Astro copies site/public/* to
+      # the site root, so this is served at
+      # https://corvidlabs.github.io/attest/badge.json and powers the live
+      # README badge. Git notes are not shown in the GitHub UI; this badge (plus
+      # the CI commit status) is how provenance surfaces in the browser.
+      - name: Build attest (release)
+        run: swift build -c release
+
+      - name: Emit live provenance badge JSON
+        run: |
+          set -uo pipefail
+          ATTEST=".build/release/attest"
+          # Attestation records live in refs/notes/attest, which a plain
+          # checkout does not fetch, so pull them so verify can see them.
+          git fetch origin "refs/notes/*:refs/notes/*" || true
+          "$ATTEST" verify --commit HEAD --policy .attest.json
+          code=$?
+          if [ "$code" = "0" ]; then
+            MESSAGE="verified"
+            COLOR="brightgreen"
+          else
+            MESSAGE="unverified"
+            COLOR="red"
+          fi
+          echo "attest badge: $MESSAGE ($COLOR)"
+          printf '{"schemaVersion":1,"label":"attest","message":"%s","color":"%s"}\n' \
+            "$MESSAGE" "$COLOR" > site/public/badge.json
+          cat site/public/badge.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

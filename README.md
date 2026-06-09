@@ -1,8 +1,18 @@
 # attest
 
-**A verifiable trust record for code changes.** `attest` records signed attestations (who
-or what reviewed a change, and at what confidence) keyed to git commit SHAs and stored in
-**git notes**, so the trail travels with your repository across every git host.
+**A verifiable trust record for code changes.**
+
+[![attest](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/attest/badge.json)](https://corvidlabs.github.io/attest/)
+[![CI](https://github.com/CorvidLabs/attest/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/attest/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Fattest-blue)](https://corvidlabs.github.io/attest/)
+
+```sh
+swift build -c release && install -m 0755 .build/release/attest /usr/local/bin/attest
+```
+
+`attest` records signed attestations (who or what reviewed a change, and at what confidence)
+keyed to git commit SHAs and stored in **git notes**, so the trail travels with your repository
+across every git host.
 
 Built for the world where agents write most of the code. `augur` answers *how risky is this
 diff, and should a human look?*, but that verdict is ephemeral. `attest` makes it durable: a

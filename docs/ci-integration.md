@@ -66,6 +66,71 @@ The action has **no outputs**; its contract is the **exit code**. A policy viola
 > release`. Cross-repo packaging (shipping a prebuilt binary and installing it into other repos
 > without a Swift toolchain) is a deferred later step.
 
+## Surfacing provenance in the GitHub web UI
+
+attest stores its ledger in git notes (`refs/notes/attest`). Git notes are **not** rendered
+anywhere in the GitHub web UI, so a verified commit looks the same as an unverified one in the
+browser. attest's own CI closes that gap with two browser-visible surfaces, both backed by the
+same `refs/notes/attest` ledger.
+
+### Commit-status check
+
+After the fatal `attest verify` gate, CI posts a GitHub **commit status** named `attest` on the
+verified SHA. It shows up as a check on the commit page and in the PR checks list, with a link
+back to the run:
+
+```yaml
+permissions:
+  contents: write     # push the notes ledger
+  statuses: write     # post the commit status below
+```
+
+```yaml
+      - name: Post attest commit status
+        if: always() && steps.verify.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEST_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          VERIFY_CODE: ${{ steps.verify.outputs.exit_code }}
+        run: |
+          if [ "${VERIFY_CODE:-1}" = "0" ]; then STATE=success; DESC="provenance verified";
+          else STATE=failure; DESC="policy not satisfied"; fi
+          gh api -X POST "repos/${{ github.repository }}/statuses/$ATTEST_SHA" \
+            -f state="$STATE" -f context="attest" -f description="$DESC" \
+            -f target_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            || echo "status post skipped"
+```
+
+The mapping is direct: `attest verify` exit `0` posts `state=success` ("provenance verified"),
+any non-zero exit posts `state=failure` ("policy not satisfied"). The SHA is the PR head on a
+`pull_request` event and the pushed SHA otherwise. The call uses the default `github.token` and
+is best-effort (`|| echo "status post skipped"`) so a token hiccup can never redden CI by itself;
+the fatal verify gate in the prior step remains the only thing that fails the job.
+
+### Live README badge
+
+The public Pages build (`.github/workflows/pages.yml`) emits a [shields.io endpoint](
+https://shields.io/badges/endpoint-badge) JSON at the site root that reflects attest's provenance
+status for `HEAD`. Before the Astro build it builds the release binary, fetches the notes ledger,
+runs `attest verify --commit HEAD --policy .attest.json`, and writes `site/public/badge.json`:
+
+```json
+{"schemaVersion":1,"label":"attest","message":"verified","color":"brightgreen"}
+```
+
+On a verify failure (or no attestation) it writes `"message":"unverified","color":"red"` instead.
+Astro copies `site/public/*` to the site root, so the file is served at
+`https://corvidlabs.github.io/attest/badge.json`. The README badge points shields.io at that
+endpoint, so the badge text tracks attest's own provenance ledger:
+
+```markdown
+[![attest](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/attest/badge.json)](https://corvidlabs.github.io/attest/)
+```
+
+Both surfaces are read-only views of the same `refs/notes/attest` ledger that `attest verify`
+gates on: the commit status reflects per-commit verification at CI time, and the badge reflects
+`HEAD` at each Pages build.
+
 ## The augur → attest trust pipeline
 
 [`augur`](https://github.com/CorvidLabs/augur) scores diff risk and emits a verdict (`proceed` /
