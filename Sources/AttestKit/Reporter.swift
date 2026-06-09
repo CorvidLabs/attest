@@ -30,7 +30,7 @@ public enum Reporter {
             let header = "  commit \(shortSHA(group.commit))  (\(count) attestation\(count == 1 ? "" : "s"))"
             lines.append(colorizer.dim(header))
             for attestation in group.attestations {
-                lines.append("    " + renderRow(attestation, colorizer: colorizer))
+                lines.append("    " + renderRow(attestation, noteKey: group.commit, colorizer: colorizer))
                 if let note = attestation.note, !note.isEmpty {
                     lines.append(colorizer.dim("        note: \(note)"))
                 }
@@ -39,7 +39,7 @@ public enum Reporter {
         return lines.joined(separator: "\n")
     }
 
-    private static func renderRow(_ attestation: Attestation, colorizer: Colorizer) -> String {
+    private static func renderRow(_ attestation: Attestation, noteKey: String, colorizer: Colorizer) -> String {
         let verdictRaw = attestation.verdict.map { $0.rawValue } ?? "—"
         let verdict = colorize(verdict: attestation.verdict, text: "verdict:\(verdictRaw)", colorizer: colorizer)
 
@@ -52,13 +52,22 @@ public enum Reporter {
         let human = attestation.humanApproved
             ? colorizer.green("human:ok")
             : colorizer.dim("human:—")
-        let signed = signatureBadge(attestation, colorizer: colorizer)
+        let signed = signatureBadge(attestation, noteKey: noteKey, colorizer: colorizer)
         let badge = colorize(verdict: attestation.verdict, text: badge(attestation.verdict), colorizer: colorizer)
         let reviewer = colorizer.cyan(attestation.reviewer)
         return "\(badge) \(reviewer)  \(verdict)  \(confidence)  \(tests)  \(human)  \(signed)"
     }
 
-    private static func signatureBadge(_ attestation: Attestation, colorizer: Colorizer) -> String {
+    private static func signatureBadge(_ attestation: Attestation, noteKey: String, colorizer: Colorizer) -> String {
+        // Commit binding: a record whose inner `commit` does not match the note key it
+        // is filed under has been relocated onto another commit (a cross-commit replay).
+        // Its signature may still validate over its own unchanged bytes, but it is not
+        // evidence for this commit, so surface it as a mismatch rather than as a normal
+        // signed record. This is checked before the signature so a transplanted record is
+        // never rendered `signed[ok]`.
+        guard attestation.commit == noteKey else {
+            return colorizer.boldRed("commit-mismatch")
+        }
         guard attestation.isSigned else {
             return colorizer.dim("unsigned")
         }

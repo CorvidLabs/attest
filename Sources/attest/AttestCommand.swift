@@ -275,11 +275,23 @@ struct Log: AsyncParsableCommand {
         // and forces a non-zero exit, while every readable commit still prints normally.
         var groups: [(commit: String, attestations: [Attestation])] = []
         var hadUnreadable = false
+        var hadMismatch = false
         for sha in commits {
             do {
                 let attestations = try store.attestations(for: sha)
                 if !attestations.isEmpty {
                     groups.append((commit: sha, attestations: attestations))
+                    // Commit binding: a record whose inner `commit` does not match the note
+                    // key it is filed under has been relocated onto another commit. Warn
+                    // loudly (stderr, never stdout) and force a non-zero exit; the listing
+                    // marks it `commit-mismatch` rather than rendering it as a valid record.
+                    for attestation in attestations where attestation.commit != sha {
+                        hadMismatch = true
+                        Self.warn(
+                            "attest log: \(sha): record names commit \(attestation.commit), "
+                                + "not the commit it is stored under (cross-commit mismatch)"
+                        )
+                    }
                 }
             } catch let error as AttestError {
                 hadUnreadable = true
@@ -293,7 +305,7 @@ struct Log: AsyncParsableCommand {
             print(Reporter.renderLog(groups, colorizer: colorOptions.colorizer(json: json)))
         }
 
-        if hadUnreadable {
+        if hadUnreadable || hadMismatch {
             throw ExitCode(1)
         }
     }
