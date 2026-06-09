@@ -91,8 +91,14 @@ struct Sign: AsyncParsableCommand {
             if resolvedConfidence == nil { resolvedConfidence = augur.confidence }
         }
 
+        // A human sign-off is itself the confidence signal, so a bare
+        // `--human-approved` needs no explicit number; default to full confidence.
+        if resolvedConfidence == nil && humanApproved {
+            resolvedConfidence = 1.0
+        }
+
         guard let finalConfidence = resolvedConfidence else {
-            throw ValidationError("provide --confidence or --from-augur to supply a confidence value")
+            throw ValidationError("provide --confidence, --human-approved, or --from-augur to supply a confidence value")
         }
 
         let attestation = Attestation(
