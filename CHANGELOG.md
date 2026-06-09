@@ -4,6 +4,7 @@
 
 ### Other
 
+- Add: attest self-dogfooding — attest records provenance attestations on its OWN commits. CI (self-hosted macOS) attests each commit with an `agent:ci` record and gates it against `.attest.json` (fatal), pushing the growing ledger to `refs/notes/attest` on `main`. New `examples/dogfood.sh` (PASS under a lax / FAIL under a strict policy on attest's real HEAD) and `docs/dogfooding.md` with real captured proof.
 - Add: colorful terminal output for `attest log`/`verify` — semantic, TTY/`NO_COLOR`-aware ANSI colour via a dependency-free `Colorizer`, gated by `--color auto|always|never`; piped and `--json` output stays plain.
 
 ## [v0.1.0] - 2026-06-09
