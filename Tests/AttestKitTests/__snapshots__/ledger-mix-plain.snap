@@ -1,0 +1,6 @@
+attest · ledger
+
+  commit abc1234567  (2 attestations)
+    [ok] agent:claude  verdict:proceed  conf:95%  tests:ok  human:—  unsigned
+    [!] human:leif  verdict:review  conf:72%  tests:ok  human:ok  signed[ok]
+        note: reviewed the migration by hand

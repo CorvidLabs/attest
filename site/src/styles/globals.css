@@ -33,6 +33,9 @@
   --ok: #34d399;
   --ok-bright: #6ee7b7;
   --ok-muted: rgba(52, 211, 153, 0.12);
+  /* semantic "info" — cyan, mirroring the CLI's reviewer-identity colour. Like the
+     ok/warn/block cues, this is a meaning colour, independent of the red brand. */
+  --info: #67e8f9;
   --tap: 44px;
   --max-w: 1180px;
   --container-pad: 32px;
