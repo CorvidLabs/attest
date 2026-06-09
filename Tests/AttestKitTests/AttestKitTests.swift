@@ -372,6 +372,162 @@ final class AttestKitTests: XCTestCase {
         XCTAssertTrue(result.passed)
     }
 
+    // MARK: - Policy: trustedKeys
+
+    func testTrustedKeysPassesWithTrustedSignedAttestation() throws {
+        let signer = Ed25519Signer.generate()
+        let policy = Policy(trustedKeys: [signer.base64PublicKey])
+        let signed = try signer.sign(makeAttestation(reviewer: "human:leif"))
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [signed])])
+        XCTAssertTrue(result.passed)
+        XCTAssertTrue(result.violations.isEmpty)
+    }
+
+    func testTrustedKeysFailsWithUntrustedSignedAttestation() throws {
+        let trusted = Ed25519Signer.generate()
+        let other = Ed25519Signer.generate()
+        let policy = Policy(trustedKeys: [trusted.base64PublicKey])
+        // A perfectly valid signature, but by a signer whose key is not trusted.
+        let signed = try other.sign(makeAttestation(reviewer: "human:leif"))
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [signed])])
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "trustedKeys")
+        XCTAssertEqual(
+            violation?.detail,
+            "signed attestation by human:leif uses an untrusted public key"
+        )
+    }
+
+    func testTrustedKeysFailsTamperedSignedAttestation() throws {
+        let signer = Ed25519Signer.generate()
+        let policy = Policy(trustedKeys: [signer.base64PublicKey])
+        let signed = try signer.sign(makeAttestation(confidence: 0.9))
+        // Keep the (trusted) key and signature, but tamper with the content.
+        let tampered = Attestation(
+            commit: signed.commit,
+            reviewer: signed.reviewer,
+            confidence: 0.1,
+            verdict: signed.verdict,
+            testsPassed: signed.testsPassed,
+            humanApproved: signed.humanApproved,
+            timestamp: signed.timestamp,
+            note: signed.note,
+            signature: signed.signature,
+            publicKey: signed.publicKey
+        )
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [tampered])])
+        XCTAssertFalse(result.passed)
+        XCTAssertEqual(result.violations.first?.rule, "trustedKeys")
+        XCTAssertEqual(
+            result.violations.first?.detail,
+            "signed attestation by \(tampered.reviewer) does not validate"
+        )
+    }
+
+    func testTrustedKeysDoesNotForceUnsignedAttestationToSign() {
+        // `trustedKeys` constrains which keys count as trusted; it does not by itself force
+        // signing. An unsigned attestation is unaffected (signing requirements live in the
+        // separate `requireSignature*` rules).
+        let signer = Ed25519Signer.generate()
+        let policy = Policy(trustedKeys: [signer.base64PublicKey])
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(reviewer: "agent:claude")])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    func testTrustedKeysEmptyListDisablesRule() throws {
+        let other = Ed25519Signer.generate()
+        let policy = Policy(trustedKeys: [])
+        let signed = try other.sign(makeAttestation())
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [signed])])
+        XCTAssertTrue(result.passed)
+    }
+
+    // MARK: - Policy: signerPinning
+
+    func testSignerPinningPassesWhenPinnedReviewerSignedWithCorrectKey() throws {
+        let signer = Ed25519Signer.generate()
+        let policy = Policy(signerPinning: ["human:leif": signer.base64PublicKey])
+        let signed = try signer.sign(makeAttestation(reviewer: "human:leif"))
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [signed])])
+        XCTAssertTrue(result.passed)
+        XCTAssertTrue(result.violations.isEmpty)
+    }
+
+    func testSignerPinningFailsWhenPinnedReviewerSignedWithWrongKey() throws {
+        let pinned = Ed25519Signer.generate()
+        let imposter = Ed25519Signer.generate()
+        let policy = Policy(signerPinning: ["human:leif": pinned.base64PublicKey])
+        // Someone signs as human:leif with their own (valid, but not pinned) key.
+        let signed = try imposter.sign(makeAttestation(reviewer: "human:leif"))
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [signed])])
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "signerPinning")
+        XCTAssertEqual(
+            violation?.detail,
+            "reviewer human:leif is not signed by its pinned public key"
+        )
+    }
+
+    func testSignerPinningFailsWhenPinnedReviewerUnsigned() throws {
+        let pinned = Ed25519Signer.generate()
+        let policy = Policy(signerPinning: ["human:leif": pinned.base64PublicKey])
+        // The classic spoof: an unsigned record simply claiming reviewer human:leif.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(reviewer: "human:leif")])
+        ])
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "signerPinning")
+        XCTAssertEqual(
+            violation?.detail,
+            "reviewer human:leif is pinned to a key but the attestation is unsigned"
+        )
+    }
+
+    func testSignerPinningLeavesNonPinnedReviewersUnaffected() throws {
+        let pinned = Ed25519Signer.generate()
+        let policy = Policy(signerPinning: ["human:leif": pinned.base64PublicKey])
+        // agent:claude is not pinned, so an unsigned record from it passes.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(reviewer: "agent:claude")])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    func testSignerPinningFailsTamperedSignatureForPinnedReviewer() throws {
+        let pinned = Ed25519Signer.generate()
+        let policy = Policy(signerPinning: ["human:leif": pinned.base64PublicKey])
+        let signed = try pinned.sign(makeAttestation(reviewer: "human:leif", confidence: 0.9))
+        // Tamper: correct pinned key, but mutated content invalidates the signature.
+        let tampered = Attestation(
+            commit: signed.commit,
+            reviewer: signed.reviewer,
+            confidence: 0.1,
+            verdict: signed.verdict,
+            testsPassed: signed.testsPassed,
+            humanApproved: signed.humanApproved,
+            timestamp: signed.timestamp,
+            note: signed.note,
+            signature: signed.signature,
+            publicKey: signed.publicKey
+        )
+        let result = Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [tampered])])
+        XCTAssertFalse(result.passed)
+        XCTAssertEqual(result.violations.first?.rule, "signerPinning")
+    }
+
+    func testSignerPinningEmptyMapDisablesRule() {
+        let policy = Policy(signerPinning: [:])
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(reviewer: "human:leif")])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
     func testPolicyDecodesFromJSON() throws {
         let json = """
         {
@@ -380,7 +536,9 @@ final class AttestKitTests: XCTestCase {
           "minimumConfidence": 0.7,
           "allowedReviewers": ["human:", "agent:claude"],
           "requireSignatureWhenVerdictAtLeast": "block",
-          "requireTestsPassedWhenVerdictAtLeast": "review"
+          "requireTestsPassedWhenVerdictAtLeast": "review",
+          "trustedKeys": ["AAAA", "BBBB"],
+          "signerPinning": { "human:leif": "AAAA" }
         }
         """
         let policy = try JSONDecoder().decode(Policy.self, from: Data(json.utf8))
@@ -390,6 +548,8 @@ final class AttestKitTests: XCTestCase {
         XCTAssertEqual(policy.allowedReviewers, ["human:", "agent:claude"])
         XCTAssertEqual(policy.requireSignatureWhenVerdictAtLeast, .block)
         XCTAssertEqual(policy.requireTestsPassedWhenVerdictAtLeast, .review)
+        XCTAssertEqual(policy.trustedKeys, ["AAAA", "BBBB"])
+        XCTAssertEqual(policy.signerPinning, ["human:leif": "AAAA"])
         // Unspecified fields take defaults.
         XCTAssertTrue(policy.requireAttestation)
         XCTAssertFalse(policy.requireSignature)
