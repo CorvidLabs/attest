@@ -38,6 +38,20 @@ public struct Policy: Sendable, Codable, Equatable {
     /// its attestations carries a verdict at or above this level. The passing-tests record
     /// can be a *separate* attestation. `nil` disables the rule.
     public var requireTestsPassedWhenVerdictAtLeast: Verdict?
+    /// A list of trusted base64 Ed25519 public keys. When non-`nil` and non-empty, every
+    /// *signed* attestation on a commit must verify **and** carry a `publicKey` present in this
+    /// list; a signed attestation whose key is untrusted (or whose signature fails) fails the
+    /// commit. Unsigned attestations are not forced to sign by this rule — they are governed by
+    /// the separate `requireSignature*` rules — so `trustedKeys` constrains *which keys count as
+    /// trusted*, not whether signing is required. A `nil` or empty list disables the rule.
+    public var trustedKeys: [String]?
+    /// Bind specific reviewers to specific base64 Ed25519 public keys. When non-`nil` and
+    /// non-empty, any attestation whose `reviewer` is a key in this map must be *signed* with the
+    /// pinned public key **and** the signature must verify; an attestation claiming a pinned
+    /// reviewer but signed with a different key (or left unsigned) fails the commit. Reviewers
+    /// absent from the map are unaffected. This is what stops `reviewer: human:leif` spoofing. A
+    /// `nil` or empty map disables the rule.
+    public var signerPinning: [String: String]?
 
     public init(
         requireAttestation: Bool = true,
@@ -47,7 +61,9 @@ public struct Policy: Sendable, Codable, Equatable {
         minimumConfidence: Double? = nil,
         allowedReviewers: [String]? = nil,
         requireSignatureWhenVerdictAtLeast: Verdict? = nil,
-        requireTestsPassedWhenVerdictAtLeast: Verdict? = nil
+        requireTestsPassedWhenVerdictAtLeast: Verdict? = nil,
+        trustedKeys: [String]? = nil,
+        signerPinning: [String: String]? = nil
     ) {
         self.requireAttestation = requireAttestation
         self.requireHumanApprovalWhenVerdictAtLeast = requireHumanApprovalWhenVerdictAtLeast
@@ -57,6 +73,8 @@ public struct Policy: Sendable, Codable, Equatable {
         self.allowedReviewers = allowedReviewers
         self.requireSignatureWhenVerdictAtLeast = requireSignatureWhenVerdictAtLeast
         self.requireTestsPassedWhenVerdictAtLeast = requireTestsPassedWhenVerdictAtLeast
+        self.trustedKeys = trustedKeys
+        self.signerPinning = signerPinning
     }
 
     enum CodingKeys: String, CodingKey {
@@ -68,6 +86,8 @@ public struct Policy: Sendable, Codable, Equatable {
         case allowedReviewers
         case requireSignatureWhenVerdictAtLeast
         case requireTestsPassedWhenVerdictAtLeast
+        case trustedKeys
+        case signerPinning
     }
 
     public init(from decoder: any Decoder) throws {
@@ -83,6 +103,8 @@ public struct Policy: Sendable, Codable, Equatable {
             try container.decodeIfPresent(Verdict.self, forKey: .requireSignatureWhenVerdictAtLeast)
         self.requireTestsPassedWhenVerdictAtLeast =
             try container.decodeIfPresent(Verdict.self, forKey: .requireTestsPassedWhenVerdictAtLeast)
+        self.trustedKeys = try container.decodeIfPresent([String].self, forKey: .trustedKeys)
+        self.signerPinning = try container.decodeIfPresent([String: String].self, forKey: .signerPinning)
     }
 
     /// The default policy: require an attestation, nothing more.
@@ -258,6 +280,53 @@ public struct Verifier: Sendable {
                     rule: "requireTestsPassedWhenVerdictAtLeast",
                     detail: "verdict is at least \(threshold.rawValue) on this commit but no attestation reports passing tests"
                 ))
+            }
+        }
+
+        if let trusted = policy.trustedKeys, !trusted.isEmpty {
+            // Constrain *which keys count as trusted* for any signed attestation. An unsigned
+            // record is untouched here (it is governed by the separate `requireSignature*`
+            // rules). A record that carries a signature must verify against its embedded key
+            // *and* that key must be in the trusted set; a signed record whose key is untrusted
+            // or whose signature fails is rejected. Reuses the existing `Ed25519Verifier`.
+            for attestation in attestations where attestation.isSigned {
+                if !Ed25519Verifier.isValid(attestation) {
+                    violations.append(Violation(
+                        commit: commit,
+                        rule: "trustedKeys",
+                        detail: "signed attestation by \(attestation.reviewer) does not validate"
+                    ))
+                } else if let key = attestation.publicKey, !trusted.contains(key) {
+                    violations.append(Violation(
+                        commit: commit,
+                        rule: "trustedKeys",
+                        detail: "signed attestation by \(attestation.reviewer) uses an untrusted public key"
+                    ))
+                }
+            }
+        }
+
+        if let pinning = policy.signerPinning, !pinning.isEmpty {
+            // Bind identity to a key: any attestation claiming a pinned reviewer must be signed
+            // with that exact pinned public key and the signature must verify. This is what stops
+            // a spoofed `reviewer: human:leif`. Reviewers absent from the map are unaffected.
+            for attestation in attestations {
+                guard let pinnedKey = pinning[attestation.reviewer] else {
+                    continue
+                }
+                if !attestation.isSigned {
+                    violations.append(Violation(
+                        commit: commit,
+                        rule: "signerPinning",
+                        detail: "reviewer \(attestation.reviewer) is pinned to a key but the attestation is unsigned"
+                    ))
+                } else if !Ed25519Verifier.isValid(attestation, expectedPublicKey: pinnedKey) {
+                    violations.append(Violation(
+                        commit: commit,
+                        rule: "signerPinning",
+                        detail: "reviewer \(attestation.reviewer) is not signed by its pinned public key"
+                    ))
+                }
             }
         }
 

@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 4
+version: 5
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -91,10 +91,12 @@ Two design commitments make it usable everywhere:
 
 | Export | Description |
 |--------|-------------|
-| `Policy.init(requireAttestation:requireHumanApprovalWhenVerdictAtLeast:requireTestsPassed:requireSignature:minimumConfidence:allowedReviewers:requireSignatureWhenVerdictAtLeast:requireTestsPassedWhenVerdictAtLeast:)` | Construct a gate; all rules optional with permissive defaults. |
+| `Policy.init(requireAttestation:requireHumanApprovalWhenVerdictAtLeast:requireTestsPassed:requireSignature:minimumConfidence:allowedReviewers:requireSignatureWhenVerdictAtLeast:requireTestsPassedWhenVerdictAtLeast:trustedKeys:signerPinning:)` | Construct a gate; all rules optional with permissive defaults. |
 | `Policy.allowedReviewers` | When set, every attestation on a commit must have a `reviewer` matching one of the patterns (exact, or role-prefix when the pattern ends with `:`). |
 | `Policy.requireSignatureWhenVerdictAtLeast` | When any attestation's verdict is at/above this level, require at least one *valid signed* attestation on the commit. |
 | `Policy.requireTestsPassedWhenVerdictAtLeast` | When any attestation's verdict is at/above this level, require at least one attestation with `testsPassed == true` on the commit. |
+| `Policy.trustedKeys` | When set (non-empty), every *signed* attestation on a commit must verify and carry a `publicKey` in this list of trusted base64 Ed25519 keys; untrusted or invalid signed records fail. Unsigned records are unaffected (governed by `requireSignature*`). |
+| `Policy.signerPinning` | When set (non-empty), any attestation whose `reviewer` is a key in this `[reviewer: base64 pubkey]` map must be signed with the pinned key and verify; a pinned reviewer signed with a different key or left unsigned fails. Stops reviewer spoofing. |
 | `Policy.default` | The default policy: require an attestation, nothing more. |
 | `Policy.load(fromFile:)` | Load a policy from a `.attest.json` file. |
 | `Verifier.init(policy:)` / `verify(commits:)` | Evaluate a policy over commits' attestations. |
@@ -154,6 +156,22 @@ Two design commitments make it usable everywhere:
   `testsPassed == true`, respectively) — not necessarily the record carrying the high
   verdict. Neither triggers when no attestation reaches the threshold.
   `requireSignatureWhenVerdictAtLeast` reuses the existing `Ed25519Verifier`.
+- `trustedKeys`, when non-`nil` and non-empty, constrains *which signing keys count as trusted*:
+  every attestation that is signed (carries both `signature` and `publicKey`) must verify against
+  its embedded key via the existing `Ed25519Verifier` **and** that `publicKey` must be a member of
+  `trustedKeys`; a signed record whose key is absent from the set, or whose signature does not
+  validate (tampered content or key mismatch), fails the commit. Crucially, `trustedKeys` does
+  **not** force signing — an unsigned attestation is untouched by this rule, because *whether*
+  signing is required is the job of the separate `requireSignature` / `requireSignatureWhenVerdictAtLeast`
+  rules. Composing `trustedKeys` with `requireSignature` (or its conditional form) is how a policy
+  both demands a signature and restricts it to a trusted key. A `nil` or empty list disables the rule.
+- `signerPinning`, when non-`nil` and non-empty, binds identity to a key: for any attestation
+  whose `reviewer` is a key in the `[reviewer: base64 publicKey]` map, the record must be signed
+  with that exact pinned public key and the signature must verify (reusing
+  `Ed25519Verifier.verify(_:expectedPublicKey:)`); a pinned reviewer that is unsigned, signed with a
+  different key, or signed but tampered fails the commit. Reviewers absent from the map are
+  unaffected. This is the rule that actually stops a spoofed `reviewer: human:leif`, which
+  `allowedReviewers` (a string gate) cannot. A `nil` or empty map disables the rule.
 - `Policy` decodes from JSON with permissive defaults: an empty `{}` policy still requires
   an attestation and passes any commit that has one.
 - `AugurVerdict.parse` maps `riskScore` (0...100) to `confidence = 1 - riskScore/100`,
@@ -201,6 +219,16 @@ Two design commitments make it usable everywhere:
 - `requireTestsPassedWhenVerdictAtLeast: "review"` fails a commit with a verdict at or above
   `review` unless *some* attestation on that commit reports `testsPassed: true` (which may be
   a separate CI record). A commit whose verdicts are all below the threshold is unaffected.
+- `trustedKeys: ["<base64 pubkey>"]` passes a commit whose signed attestation verifies against a
+  key in the list, but fails one whose signed attestation uses a key not in the list (even when that
+  signature is itself cryptographically valid) or whose signature is tampered. An *unsigned*
+  attestation on the same commit is unaffected — `trustedKeys` alone does not force signing; pair it
+  with `requireSignature: true` to both require a signature and pin it to a trusted key.
+- `signerPinning: { "human:leif": "<leif's base64 pubkey>" }` passes an attestation
+  `reviewer:human:leif` signed with leif's pinned key, but fails one claiming `reviewer:human:leif`
+  that is unsigned or signed with a different key — closing the spoof that `allowedReviewers`
+  (a string-only gate) leaves open. An attestation by `agent:claude` (a reviewer not in the map) is
+  unaffected and passes whether signed or not.
 - `attest export --range A..B` emits one JSON `AuditReport` covering every commit in the
   range (oldest first), each attestation enriched with a `verification` status, suitable for
   compliance archival — distinct from `attest log`, which is a human/diagnostic listing.
@@ -256,3 +284,14 @@ Two design commitments make it usable everywhere:
   / `requireTestsPassed` that trigger only when a commit's verdict reaches the threshold,
   mirroring `requireHumanApprovalWhenVerdictAtLeast`'s set-evaluation semantics (satisfied by
   any qualifying attestation on the commit). The signature rule reuses `Ed25519Verifier`.
+- v5: Two related signer-pinning policy rules (both permissive-default off, decoded with
+  `decodeIfPresent`, purely additive — no canonical serialization, signature, or storage change),
+  closing the gap where `allowedReviewers` gates the reviewer *string* but not the *key*, letting
+  anyone file `reviewer: human:leif`. `trustedKeys: [String]` is a set of trusted base64 Ed25519
+  public keys: every *signed* attestation must verify and use a trusted key (untrusted/invalid
+  signed records fail), while unsigned records stay governed by the `requireSignature*` rules —
+  `trustedKeys` constrains *which keys count as trusted*, it does not force signing.
+  `signerPinning: [String: String]` binds specific reviewers to specific public keys: a pinned
+  reviewer must be signed with its pinned key and verify, so an unsigned or wrong-key claim to a
+  pinned reviewer fails — this is what actually stops reviewer spoofing. Both rules reuse the
+  existing `Ed25519Verifier` (`signerPinning` via the `expectedPublicKey` parameter).
