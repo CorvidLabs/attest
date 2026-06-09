@@ -1,0 +1,23 @@
+---
+interface Props { type?: 'note' | 'warn' | 'tip' | 'spoof' }
+const { type = 'note' } = Astro.props
+---
+<aside class={`callout callout-${type}`}>
+  {type === 'spoof' && <span class="callout-spoof-icon" aria-hidden="true">⚠</span>}
+  <slot />
+</aside>
+
+<style is:global>
+  .callout { padding: 16px 18px; border-left: 3px solid var(--accent);
+    background: var(--accent-muted); border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout strong { color: var(--accent-bright); }
+  .callout-warn { border-left-color: var(--block); background: var(--block-muted); }
+  .callout-warn strong { color: #fca5a5; }
+  .callout-tip { border-left-color: var(--accent); background: var(--accent-muted); }
+  .callout-tip strong { color: var(--accent-bright); }
+  .callout-spoof { border-left-color: var(--warn); background: var(--warn-muted);
+    display: flex; gap: 12px; align-items: flex-start; }
+  .callout-spoof strong { color: var(--warn); }
+  .callout-spoof-icon { font-size: 1.1rem; color: var(--warn); flex-shrink: 0; margin-top: 1px; }
+</style>

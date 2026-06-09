@@ -1,0 +1,60 @@
+---
+interface SubItem { label: string; description: string }
+interface Props {
+  step: string
+  title: string
+  command: string
+  subItems: SubItem[]
+  badge?: string
+}
+const { step, title, command, subItems, badge } = Astro.props
+---
+<li class="pillar">
+  <div class="p-top">
+    <span class="p-step">{step}</span>
+    {badge && (
+      <span class="p-badge" aria-label={badge}>
+        <span aria-hidden="true">🔏</span> {badge}
+      </span>
+    )}
+  </div>
+  <h3 class="p-title">{title}</h3>
+  <p class="p-desc"><slot /></p>
+  <code class="p-cmd">{command}</code>
+  <ul class="p-sub">
+    {subItems.map(item => (
+      <li class="p-sub-item">
+        <span class="p-sub-label">{item.label}</span>
+        <span class="p-sub-text">{item.description}</span>
+      </li>
+    ))}
+  </ul>
+</li>
+
+<style is:global>
+  .pillar {
+    padding: 32px 28px 28px;
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    position: relative;
+    transition: background .15s;
+  }
+  .pillar:hover { background: var(--bg-raised); }
+
+  .p-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .p-step { font-family: var(--serif); font-size: 0.875rem; color: var(--text-dim);
+    font-style: italic; letter-spacing: 0.04em; }
+  .p-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem;
+    font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-bright);
+    background: var(--accent-muted); border: 1px solid rgba(16,185,129,0.25);
+    padding: 3px 8px; border-radius: 4px; }
+  .p-title { font-size: 1.5rem; letter-spacing: -0.015em; margin-bottom: 10px; line-height: 1.2; }
+  .p-desc { color: var(--text-muted); font-size: 0.9375rem; line-height: 1.65; margin-bottom: 18px; }
+  .p-cmd { font-family: var(--mono); font-size: 0.8125rem; color: var(--accent-bright); display: block;
+    padding: 10px 12px; background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 22px; overflow-x: auto; white-space: pre; }
+  .p-sub { display: flex; flex-direction: column; gap: 8px; }
+  .p-sub-item { display: flex; align-items: baseline; gap: 6px; font-size: 0.875rem; line-height: 1.45; }
+  .p-sub-label { font-weight: 600; color: var(--text); white-space: nowrap; }
+  .p-sub-text { color: var(--text-muted); }
+</style>
