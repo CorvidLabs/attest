@@ -46,8 +46,10 @@ echo "exit code: $?"
 set -e
 
 echo
-echo "== a human signs off, satisfying the policy =="
-"$ATTEST" sign --commit HEAD --reviewer human:leif --confidence 0.9 --verdict review --tests-passed --human-approved
+echo "== a human files a SEPARATE sign-off — note: no --verdict restated =="
+echo "   (the human-approval rule is satisfied by any human-approved attestation"
+echo "    on the commit, not only the record that carries the high verdict)"
+"$ATTEST" sign --commit HEAD --reviewer human:leif --confidence 0.9 --human-approved
 
 echo
 echo "== verify once more — expect PASS (exit 0) =="
