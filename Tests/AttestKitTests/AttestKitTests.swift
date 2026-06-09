@@ -226,6 +226,34 @@ final class AttestKitTests: XCTestCase {
         XCTAssertEqual(policy, .default)
     }
 
+    func testEmptyCommitRangeChecksZeroCommitsAndPasses() throws {
+        // An empty range (e.g. `HEAD..HEAD`) yields no commits; verification
+        // reports zero checked and passes — there is nothing to violate.
+        let store = InMemoryStore()
+        let result = try Attest(store: store).verify(commits: [], policy: .default)
+        XCTAssertTrue(result.passed)
+        XCTAssertEqual(result.checkedCommits, 0)
+        XCTAssertTrue(result.violations.isEmpty)
+    }
+
+    func testVerifyReportsPerCommitPassAndFail() throws {
+        // Two commits checked: one with no attestation fails, one with a
+        // satisfying attestation passes; the result counts both and pins the
+        // violation to the offending commit.
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "good", testsPassed: true))
+        try store.append(makeAttestation(commit: "bad", testsPassed: false))
+        let result = try Attest(store: store).verify(
+            commits: ["good", "bad"],
+            policy: Policy(requireTestsPassed: true)
+        )
+        XCTAssertFalse(result.passed)
+        XCTAssertEqual(result.checkedCommits, 2)
+        XCTAssertEqual(result.violations.count, 1)
+        XCTAssertEqual(result.violations.first?.commit, "bad")
+        XCTAssertEqual(result.violations.first?.rule, "requireTestsPassed")
+    }
+
     // MARK: - Augur integration
 
     func testAugurParsingMapsRiskToConfidence() throws {

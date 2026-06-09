@@ -10,3 +10,8 @@ jobs:
       - run: swift build
       - run: swift test
       - run: fledge spec check
+      - name: Dogfood attest verify (non-fatal)
+        run: |
+          echo "Dogfooding attest against its own latest commit."
+          echo "The repo may carry no attestations yet, so this step is informative, not gating."
+          swift run attest verify --range HEAD~1..HEAD --policy .attest.json || true
