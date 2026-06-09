@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.2.0] - 2026-06-09
+
+### Other
+
+- Release v0.2.0: bump CLI version (5e1a803)
+- Fix: bind attestations to their commit, rejecting cross-commit signature replay (#19) (4afd4b1)
+- Chore: surface policy trust-model caveats, tidy errors and changelog (#18) (d3e967a)
+- Fix: mobile horizontal overflow on the attest landing pillars (#17) (2b9f682)
+- Add: Quickstart and a live-examples index (#16) (a8d8900)
+- Fix: PR CI checkout depth so attest sign finds the PR head commit (#15) (126f138)
+- Fix: CI ledger now grows (fetch notes before signing, consistent SHA) (#14) (83dbc9f)
+- Add: commit-status check + live Pages badge for attest (#13) (650967e)
+- Chore: rewrite docs/site copy in plain voice, drop em-dashes (#12) (cca5146)
+- Add: attest self-dogfooding (CI provenance ledger + examples/dogfood.sh + docs/dogfooding.md) (#11) (0e8500b)
+- Add: terminal snapshot tests + site mockups accurate to colored output (#10) (a4e3caa)
+- Add: colorful terminal output + red site palette (#9) (fca01e2)
+- Chore: Node 24 workflow opt-in + review polish (#8) (c6f9826)
+- Add: Astro GitHub Pages marketing + docs site (#7) (69c5191)
+
 ## [Unreleased]
 
 ### Other
