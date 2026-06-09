@@ -103,7 +103,9 @@ attestation per commit and passes any commit that has one.
   "minimumConfidence": 0.6,
   "allowedReviewers": ["human:", "agent:claude"],
   "requireSignatureWhenVerdictAtLeast": "block",
-  "requireTestsPassedWhenVerdictAtLeast": "review"
+  "requireTestsPassedWhenVerdictAtLeast": "review",
+  "trustedKeys": ["BASE64_PUBKEY_A", "BASE64_PUBKEY_B"],
+  "signerPinning": { "human:leif": "BASE64_LEIF_PUBKEY" }
 }
 ```
 
@@ -117,6 +119,50 @@ attestation per commit and passes any commit that has one.
 | `allowedReviewers` | any attestation on the commit has a `reviewer` outside the allow-list. Matching per pattern: an **exact** match against the full reviewer string, *or* — when the pattern ends with `:` (e.g. `"human:"`) — a **prefix** match, so `"human:"` allows any `human:*` reviewer while `"agent:claude"` matches only exactly. A `nil`/empty list disables the rule. |
 | `requireSignatureWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is *validly signed*. The signature can be a *separate* attestation. Not triggered when every verdict is below the level. |
 | `requireTestsPassedWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit reports `testsPassed`. The passing-tests record can be a *separate* attestation. Not triggered when every verdict is below the level. |
+| `trustedKeys` | any *signed* attestation on the commit fails to verify, or carries a `publicKey` that is **not** in this list of trusted base64 Ed25519 keys. Unsigned attestations are **unaffected** — `trustedKeys` constrains *which keys count as trusted*, it does **not** force signing (use `requireSignature` for that). A `nil`/empty list disables the rule. |
+| `signerPinning` | an attestation whose `reviewer` is a key in this `{reviewer: base64 pubkey}` map is **unsigned**, or **signed with a different key** (or tampered). Reviewers absent from the map are unaffected. This binds identity to a key — it is what stops a spoofed `reviewer: human:leif` that `allowedReviewers` (a string-only gate) cannot. A `nil`/empty map disables the rule. |
+
+### Preventing reviewer spoofing
+
+`allowedReviewers` gates the reviewer *string* — but nothing stops anyone from filing an
+attestation that simply *claims* `reviewer: human:leif`. To bind an identity to a
+cryptographic key, use **`signerPinning`** (pin specific reviewers to specific keys) and/or
+**`trustedKeys`** (restrict which keys count as trusted at all):
+
+```json
+{
+  "requireSignature": true,
+  "trustedKeys": ["BASE64_LEIF_PUBKEY", "BASE64_CI_PUBKEY"],
+  "signerPinning": { "human:leif": "BASE64_LEIF_PUBKEY" }
+}
+```
+
+```sh
+# leif generates a key once; keygen prints the PUBLIC key to copy into the policy:
+attest keygen
+# attest · wrote private key to ~/.config/attest/key (0600)
+# public key: BASE64_LEIF_PUBKEY      <- copy this into signerPinning / trustedKeys
+
+# a genuine, signed sign-off as human:leif PASSES:
+attest sign --commit HEAD --reviewer human:leif --confidence 0.95 \
+  --verdict review --human-approved --sign
+attest verify --commit HEAD            # exit 0
+
+# a spoof — claiming human:leif unsigned, or signed with someone else's key — FAILS:
+attest sign --commit HEAD --reviewer human:leif --confidence 0.95   # unsigned claim
+attest verify --commit HEAD            # exit 1: reviewer human:leif is pinned but unsigned
+```
+
+The two rules compose:
+
+- **`signerPinning`** is per-reviewer: only reviewers in the map are constrained, and each must
+  be signed with its *exact* pinned key. This is the rule that stops `human:leif` spoofing.
+- **`trustedKeys`** is global: it does **not** force signing (an unsigned record passes it — pair
+  it with `requireSignature: true` to require a signature), but *any* record that **is** signed
+  must verify and use a key from the trusted set. It bounds the universe of acceptable signers.
+
+The full pinned lifecycle (correct-key PASS, then wrong-key/unsigned FAIL) is demonstrated
+end-to-end in [`examples/07-signer-pinning.sh`](examples/07-signer-pinning.sh).
 
 A default `.attest.json` ships at the repo root. It is intentionally permissive
 (it gates nothing yet) so it demonstrates the schema without breaking a repo that

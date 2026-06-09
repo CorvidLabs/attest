@@ -30,10 +30,16 @@
 - [x] Engine tests: pass/fail per rule, not-triggered-below-threshold for the conditional rules, prefix-vs-exact for the allow-list, JSON decoding.
 - [x] `examples/06-policy-rules.sh` and README policy-table rows + spec v4 (Public API / Invariants / Behavioral Examples / Change Log).
 
+## Done (v5)
+
+- [x] `trustedKeys` policy rule — a set of trusted base64 Ed25519 keys; every signed attestation must verify and use a trusted key. Reuses `Ed25519Verifier`. Does not force signing (that stays with `requireSignature*`).
+- [x] `signerPinning` policy rule — bind specific reviewers to specific public keys; a pinned reviewer must be signed with its pinned key and verify, stopping reviewer-string spoofing. Reuses `Ed25519Verifier(expectedPublicKey:)`.
+- [x] Engine tests: trusted-key pass/fail, untrusted-but-valid signature, tampered signed record, unsigned interaction; pinned correct-key/wrong-key/unsigned/tampered, non-pinned reviewer unaffected, JSON decoding.
+- [x] `examples/07-signer-pinning.sh` and README policy-table rows + "Preventing reviewer spoofing" subsection + spec v5 (Public API / Invariants / Behavioral Examples / Change Log).
+
 ## Next
 
 - [ ] `attest push` / `attest fetch` wrappers for `refs/notes/attest` syncing.
-- [ ] Multiple trusted public keys in the policy (beyond `allowedReviewers`, which gates the reviewer string, not the key).
-- [ ] `attest verify --require-key <pub>` to pin an expected signer.
+- [ ] `attest verify --require-key <pub>` CLI flag (the policy now expresses key trust via `trustedKeys` / `signerPinning`; a per-invocation flag is still convenient).
 - [ ] Linux/Windows CI matrix (core is macOS-targeted today).
 - [ ] Optional revocation / supersede semantics for attestations.
