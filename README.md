@@ -109,11 +109,60 @@ attestation per commit and passes any commit that has one.
 | `requireSignature` | no *valid signed* attestation exists. |
 | `minimumConfidence` | the highest recorded confidence is below the floor. |
 
+A default `.attest.json` ships at the repo root. It is intentionally permissive
+(it gates nothing yet) so it demonstrates the schema without breaking a repo that
+has no attestations:
+
+```json
+{
+  "requireAttestation": false,
+  "requireTestsPassed": false,
+  "requireSignature": false,
+  "requireHumanApprovalWhenVerdictAtLeast": "block"
+}
+```
+
+Tighten the rules as a repo starts recording attestations.
+
 ### In CI
+
+Run the binary directly:
 
 ```yaml
 - run: attest verify --range origin/main..HEAD --policy .attest.json
 ```
+
+…or use the bundled **composite GitHub Action** (`action.yml`). It builds `attest`
+from its own checkout and runs `attest verify`, failing the job on any policy
+violation:
+
+```yaml
+jobs:
+  trust:
+    runs-on: [self-hosted, macOS]   # macOS-only for now
+    steps:
+      - uses: actions/checkout@v4
+      - uses: CorvidLabs/attest@main
+        with:
+          range: origin/main..HEAD   # default
+          policy: .attest.json       # default
+          working-directory: .       # default
+```
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `range` | `origin/main..HEAD` | Git range to verify. |
+| `policy` | `.attest.json` | Path to the policy file (relative to `working-directory`). |
+| `working-directory` | `.` | Directory to run `attest verify` in. |
+
+The action has no outputs; its contract is the **exit code** — a policy violation
+propagates `attest`'s non-zero exit and fails the job.
+
+> **Honest scope.** The action builds `attest` from *its own* checkout with
+> `swift build -c release` and runs on the self-hosted **macOS ARM64** runners
+> (`runs-on: [self-hosted, macOS]`). Cross-repo packaging — shipping a prebuilt
+> `attest` and installing it into *other* repos without a Swift toolchain — is a
+> deferred later step.
 
 ### For agents
 
@@ -166,20 +215,51 @@ The engine (`AttestKit`) is fully testable without `git` via the `AttestationSto
 protocol and an `InMemoryStore` fake. It depends only on Apple's `swift-crypto`; the CLI
 uses `swift-argument-parser`.
 
-## Relationship to augur
+## Trust layer (attest + augur)
 
 [`augur`](https://github.com/CorvidLabs/augur) is the upstream risk scorer:
-`augur check` emits `proceed | review | block` with a risk score. `attest` records that
-verdict (and anything else a reviewer asserts) as a durable, signed artifact, then gates on
-it. They compose over a pipe — `attest` never links `augur`.
+`augur check` emits `proceed | review | block` with a risk score. That verdict is
+*ephemeral*. `attest` makes it durable — it records that verdict (and anything
+else a reviewer asserts) as a portable, optionally-signed artifact, then gates on
+it. **augur scores the risk; attest records the trust.** They compose over a
+pipe; `attest` never links `augur`.
 
-## Limitations
+```sh
+augur check --json | attest sign --from-augur -
+```
 
-- The git-notes store and signing are validated on **macOS** (the package targets
-  `.macOS(.v13)`). Linux/Windows support is plausible via Foundation `Process` + swift-crypto
-  but is not yet on the CI matrix.
-- `attest` uses a single local Ed25519 key and embeds the public key on each record. It is
-  not a CA: key distribution / web-of-trust and signer pinning are roadmap items.
+`--from-augur` copies augur's `verdict` and maps its `riskScore` (0...100) to
+`confidence = 1 - riskScore/100`. A worked, verified run (a risk-45 `review` diff
+becomes a 0.55-confidence attestation):
+
+```
+$ echo '{"verdict":"review","riskScore":45.0}' \
+    | attest sign --commit HEAD --reviewer agent:claude --from-augur - --tests-passed
+attest · recorded agent:claude on 9f2c1a7b04
+
+$ attest log --commit HEAD
+attest · ledger
+
+  commit 9f2c1a7b04  (1 attestation)
+    [!] agent:claude  verdict:review  conf:55%  tests:ok  human:—  unsigned
+```
+
+The full signed lifecycle (`keygen` → `--sign` → `signed[ok]` → `verify` against
+`{"requireSignature": true}`) is demonstrated end-to-end in
+[`examples/04-signed-lifecycle.sh`](examples/04-signed-lifecycle.sh).
+
+## Limitations & roadmap
+
+- **macOS-only for now.** The git-notes store, signing, CI, and the composite
+  action all target macOS (the package targets `.macOS(.v13)`; CI runs on
+  `runs-on: [self-hosted, macOS]`). Linux/Windows support is plausible via
+  Foundation `Process` + swift-crypto but is not yet on the matrix.
+- The composite action (`action.yml`) builds `attest` from its own checkout.
+  **Cross-repo packaging** — shipping a prebuilt binary and installing it into
+  other repos without a Swift toolchain — is a deferred later step.
+- `attest` uses a single local Ed25519 key and embeds the public key on each
+  record. It is not a CA: key distribution / web-of-trust and signer pinning are
+  roadmap items.
 
 ## License
 

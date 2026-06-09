@@ -1,0 +1,34 @@
+name: "attest verify"
+description: >-
+  Build attest from this checkout and gate a commit range against an
+  .attest.json policy, failing the job on any policy violation. macOS only.
+author: "CorvidLabs"
+
+inputs:
+  range:
+    description: "Git range to verify, e.g. 'origin/main..HEAD'."
+    required: false
+    default: "origin/main..HEAD"
+  policy:
+    description: "Path to the policy file, relative to working-directory."
+    required: false
+    default: ".attest.json"
+  working-directory:
+    description: "Directory to run attest in (the repository to verify)."
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build attest (release)
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: swift build -c release
+    - name: attest verify
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        "${{ github.action_path }}/.build/release/attest" verify \
+          --range "${{ inputs.range }}" \
+          --policy "${{ inputs.policy }}"

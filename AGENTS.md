@@ -31,6 +31,16 @@ trust-record companion to `augur`: augur scores diff risk, attest records the tr
 | `Tests/AttestKitTests/` | Engine tests via an in-memory `AttestationStore`. |
 | `specs/provenance-ledger/` | The spec spec-sync validates against the code. |
 | `examples/` | Runnable shell scripts against throwaway `/tmp` repos. |
+| `action.yml` | Composite GitHub Action ("attest verify") that builds attest from its own checkout and gates a range against `.attest.json`. |
+| `.attest.json` | The committed default policy (permissive; demonstrates the schema). |
+
+## CI / platform
+
+attest is **macOS-only for now** — do not add Linux/Windows runners or support. CI
+runs on the self-hosted **macOS ARM64** runners (`runs-on: [self-hosted, macOS]`):
+`swift build`, `swift test`, `fledge spec check`, plus a non-fatal dogfood step that
+runs `attest verify` against the latest commit. The composite action in `action.yml`
+builds attest from its own checkout; cross-repo binary packaging is deferred.
 
 ## Workflow
 
