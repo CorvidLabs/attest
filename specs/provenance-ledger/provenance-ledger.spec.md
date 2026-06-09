@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 3
+version: 4
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -91,7 +91,10 @@ Two design commitments make it usable everywhere:
 
 | Export | Description |
 |--------|-------------|
-| `Policy.init(requireAttestation:requireHumanApprovalWhenVerdictAtLeast:requireTestsPassed:requireSignature:minimumConfidence:)` | Construct a gate; all rules optional with permissive defaults. |
+| `Policy.init(requireAttestation:requireHumanApprovalWhenVerdictAtLeast:requireTestsPassed:requireSignature:minimumConfidence:allowedReviewers:requireSignatureWhenVerdictAtLeast:requireTestsPassedWhenVerdictAtLeast:)` | Construct a gate; all rules optional with permissive defaults. |
+| `Policy.allowedReviewers` | When set, every attestation on a commit must have a `reviewer` matching one of the patterns (exact, or role-prefix when the pattern ends with `:`). |
+| `Policy.requireSignatureWhenVerdictAtLeast` | When any attestation's verdict is at/above this level, require at least one *valid signed* attestation on the commit. |
+| `Policy.requireTestsPassedWhenVerdictAtLeast` | When any attestation's verdict is at/above this level, require at least one attestation with `testsPassed == true` on the commit. |
 | `Policy.default` | The default policy: require an attestation, nothing more. |
 | `Policy.load(fromFile:)` | Load a policy from a `.attest.json` file. |
 | `Verifier.init(policy:)` / `verify(commits:)` | Evaluate a policy over commits' attestations. |
@@ -139,6 +142,18 @@ Two design commitments make it usable everywhere:
   attestations as a set: it triggers when any attestation's verdict is at or above the
   threshold, and is satisfied when any attestation on the commit is `humanApproved`. The
   triggering verdict and the human sign-off need not be the same record.
+- `allowedReviewers`, when non-`nil` and non-empty, is an allow-list: *every* attestation on
+  the commit must match at least one pattern, or the commit fails. A pattern matches a
+  reviewer exactly, or — when the pattern ends with `:` (a role prefix such as `"human:"`) —
+  when the reviewer begins with that prefix (so `"human:"` allows any `human:*`, while
+  `"agent:claude"` matches only exactly). A `nil` or empty list disables the rule.
+- `requireSignatureWhenVerdictAtLeast` and `requireTestsPassedWhenVerdictAtLeast` mirror the
+  set-evaluation semantics of `requireHumanApprovalWhenVerdictAtLeast`: each triggers when
+  *any* attestation on the commit carries a verdict at or above the threshold, and is
+  satisfied by *any* qualifying attestation anywhere on the commit (a valid signature, or
+  `testsPassed == true`, respectively) — not necessarily the record carrying the high
+  verdict. Neither triggers when no attestation reaches the threshold.
+  `requireSignatureWhenVerdictAtLeast` reuses the existing `Ed25519Verifier`.
 - `Policy` decodes from JSON with permissive defaults: an empty `{}` policy still requires
   an attestation and passes any commit that has one.
 - `AugurVerdict.parse` maps `riskScore` (0...100) to `confidence = 1 - riskScore/100`,
@@ -176,6 +191,16 @@ Two design commitments make it usable everywhere:
   attestation that does not restate the verdict: an agent record `verdict:review,
   humanApproved:false` plus a human record `humanApproved:true` (verdict `nil`) on the same
   commit passes. A commit whose verdicts are all below the threshold is unaffected.
+- `allowedReviewers: ["human:", "agent:claude"]` passes a commit whose reviewers are
+  `human:leif` (prefix match) and `agent:claude` (exact match), but fails a commit with an
+  `agent:gpt` attestation (exact-only pattern, no match).
+- `requireSignatureWhenVerdictAtLeast: "review"` fails a commit that has any attestation with
+  a verdict at or above `review` unless *some* attestation on that commit is validly signed;
+  a separate signed `human:leif` record (verdict `nil`) clears an agent's unsigned `block`
+  verdict. A commit whose verdicts are all below the threshold is unaffected.
+- `requireTestsPassedWhenVerdictAtLeast: "review"` fails a commit with a verdict at or above
+  `review` unless *some* attestation on that commit reports `testsPassed: true` (which may be
+  a separate CI record). A commit whose verdicts are all below the threshold is unaffected.
 - `attest export --range A..B` emits one JSON `AuditReport` covering every commit in the
   range (oldest first), each attestation enriched with a `verification` status, suitable for
   compliance archival — distinct from `attest log`, which is a human/diagnostic listing.
@@ -223,3 +248,11 @@ Two design commitments make it usable everywhere:
   (without restating the verdict) to clear an agent's `review`/`block` verdict, fixing a
   footgun where a legitimate separate sign-off was rejected. No API, schema, or canonical
   serialization change; only the `Verifier` evaluation and the violation message wording.
+- v4: Three additional, optional policy rules (all permissive-default off, decoded with
+  `decodeIfPresent`, purely additive — no canonical serialization, signature, or storage
+  change). `allowedReviewers: [String]` is a per-commit reviewer allow-list with exact and
+  role-prefix (`"human:"`) matching. `requireSignatureWhenVerdictAtLeast: Verdict` and
+  `requireTestsPassedWhenVerdictAtLeast: Verdict` are conditional forms of `requireSignature`
+  / `requireTestsPassed` that trigger only when a commit's verdict reaches the threshold,
+  mirroring `requireHumanApprovalWhenVerdictAtLeast`'s set-evaluation semantics (satisfied by
+  any qualifying attestation on the commit). The signature rule reuses `Ed25519Verifier`.
