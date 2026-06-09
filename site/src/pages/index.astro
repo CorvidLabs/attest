@@ -8,7 +8,7 @@ import Callout from '../components/Callout.astro'
 import Terminal from '../components/Terminal.astro'
 import { base } from '../lib/path'
 ---
-<BaseLayout title="attest — signed provenance for code changes">
+<BaseLayout title="attest: signed provenance for code changes">
 <main id="main">
 
 <section class="hero" aria-labelledby="hero-h">
@@ -16,7 +16,7 @@ import { base } from '../lib/path'
     <div class="hero-grid">
       <div>
         <Badge dot>v0.1.0 · the trust layer for agent-written code</Badge>
-        <h1 class="hero-h1" id="hero-h">Record <span class="seal">who vetted</span><br>this change — and prove it.</h1>
+        <h1 class="hero-h1" id="hero-h">Record <span class="seal">who vetted</span><br>this change, and prove it.</h1>
         <p class="hero-sub">A verifiable, policy-gated ledger of who reviewed what and at what confidence, keyed to commit SHAs and stored in git notes. Optionally Ed25519-signed. <strong>augur scores the risk; attest records the trust.</strong></p>
         <div class="hero-actions">
           <Button href={`${base}docs/quickstart`} variant="primary">Get started <span aria-hidden="true">→</span></Button>
@@ -35,8 +35,8 @@ import { base } from '../lib/path'
   <div class="container">
     <ul class="stats-grid">
       <li class="stat"><div class="num">11</div><div class="lbl">policy rules</div><div class="sub">all optional, permissive defaults</div></li>
-      <li class="stat"><div class="num">0</div><div class="lbl">services</div><div class="sub">stored in git notes — no DB, no backend</div></li>
-      <li class="stat"><div class="num">1</div><div class="lbl">key, optional</div><div class="sub">Ed25519 — unsigned records still valid</div></li>
+      <li class="stat"><div class="num">0</div><div class="lbl">services</div><div class="sub">stored in git notes, no DB, no backend</div></li>
+      <li class="stat"><div class="num">1</div><div class="lbl">key, optional</div><div class="sub">Ed25519, unsigned records still valid</div></li>
       <li class="stat"><div class="num">5</div><div class="lbl">subcommands</div><div class="sub">sign · verify · log · export · keygen</div></li>
     </ul>
   </div>
@@ -49,21 +49,21 @@ import { base } from '../lib/path'
       <h2 id="demo-h">Trust that <em>travels with the repo.</em></h2>
       <p>An agent records its verdict; a human signs off; a policy gates the merge. The record lives in <code>refs/notes/attest</code> and moves with every <code>git push</code>.</p>
     </header>
-    <Terminal title="attest — log then verify" ariaLabel="Showing the colored attestation ledger then verifying it against a policy">
+    <Terminal title="attest log then verify" ariaLabel="Showing the colored attestation ledger then verifying it against a policy">
       <div class="term-line"><span class="term-comment"># an agent scores the diff with augur and records it; a human files a signed sign-off</span></div>
       <div class="term-line"><span class="term-prompt">$</span> augur check --json | attest sign --commit HEAD --reviewer agent:claude --from-augur - --tests-passed</div>
       <div class="term-line"><span class="term-prompt">$</span> attest sign --commit HEAD --reviewer human:leif --confidence 0.72 --verdict review --human-approved --tests-passed --sign</div>
       <div class="term-line">&nbsp;</div>
-      <div class="term-line"><span class="term-comment"># the ledger, in colour — green = proceed/verified, amber = review, cyan = reviewer, dim = unsigned</span></div>
+      <div class="term-line"><span class="term-comment"># the ledger, in colour: green = proceed/verified, amber = review, cyan = reviewer, dim = unsigned</span></div>
       <div class="term-line"><span class="term-prompt">$</span> attest log --commit HEAD</div>
       <div class="term-line"><span class="term-bold">attest · ledger</span></div>
       <div class="term-line">&nbsp;</div>
       <div class="term-line"><span class="term-dim">&nbsp;&nbsp;commit abc1234567  (2 attestations)</span></div>
-      <div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-good">[ok]</span> <span class="term-info">agent:claude</span>  <span class="term-good">verdict:proceed</span>  <span class="term-good">conf:95%</span>  <span class="term-good">tests:ok</span>  <span class="term-dim">human:—</span>  <span class="term-dim">unsigned</span></div>
+      <div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-good">[ok]</span> <span class="term-info">agent:claude</span>  <span class="term-good">verdict:proceed</span>  <span class="term-good">conf:95%</span>  <span class="term-good">tests:ok</span>  <span class="term-dim">human:-</span>  <span class="term-dim">unsigned</span></div>
       <div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-warn">[!]</span> <span class="term-info">human:leif</span>  <span class="term-warn">verdict:review</span>  <span class="term-warn">conf:72%</span>  <span class="term-good">tests:ok</span>  <span class="term-good">human:ok</span>  <span class="term-good">signed[ok]</span></div>
       <div class="term-line"><span class="term-dim">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note: reviewed the migration by hand</span></div>
       <div class="term-line">&nbsp;</div>
-      <div class="term-line"><span class="term-comment"># CI / the agent gates on the policy — exit code is the contract</span></div>
+      <div class="term-line"><span class="term-comment"># CI / the agent gates on the policy: exit code is the contract</span></div>
       <div class="term-line"><span class="term-prompt">$</span> attest verify --range origin/main..HEAD --policy .attest.json</div>
       <div class="term-line"><span class="term-bold">attest verify ·</span> <span class="term-good-bold">[ok] PASS</span> <span class="term-dim">(3 commits checked)</span></div>
       <div class="term-line"><span class="term-prompt">$</span> echo $?</div>
@@ -77,11 +77,11 @@ import { base } from '../lib/path'
     <header class="section-head">
       <p class="section-eyebrow">The loop</p>
       <h2 id="pillars-h">Score, record, <em>gate.</em></h2>
-      <p>Agents made code cheap; the scarce resource is now trust. attest is the missing primitive — a portable record an agent or a human can verify, and a policy CI can block on.</p>
+      <p>Agents made code cheap; the scarce resource is now trust. attest is the missing primitive: a portable record an agent or a human can verify, and a policy CI can block on.</p>
     </header>
 
     <Callout type="tip">
-      <p><strong>Why attest?</strong> When an agent lands a change, there is no native, portable record of which agent or human vetted it — that context is lost the moment the PR merges. attest makes it durable: a signed artifact keyed to the commit SHA, stored in git notes, that travels with your repository across every git host.</p>
+      <p><strong>Why attest?</strong> When an agent lands a change, there is no native, portable record of which agent or human vetted it, and that context is lost the moment the PR merges. attest makes it durable: a signed artifact keyed to the commit SHA, stored in git notes, that travels with your repository across every git host.</p>
     </Callout>
 
     <ul class="pillars-grid">
@@ -91,7 +91,7 @@ import { base } from '../lib/path'
         command="$ attest sign --reviewer agent:claude --from-augur -"
         subItems={[
           { label: "augur pipe", description: "verdict + confidence auto-filled from augur's risk score" },
-          { label: "git notes", description: "stored in refs/notes/attest — no service, no database" }
+          { label: "git notes", description: "stored in refs/notes/attest, no service, no database" }
         ]}
       >
         Capture who or what reviewed a change, at what confidence, keyed to the commit SHA.
@@ -103,7 +103,7 @@ import { base } from '../lib/path'
         command="$ attest keygen && attest sign … --sign"
         badge="Ed25519"
         subItems={[
-          { label: "Optional", description: "unsigned records are still valid — signing is opt-in" },
+          { label: "Optional", description: "unsigned records are still valid; signing is opt-in" },
           { label: "Pinned identity", description: "signerPinning binds human:leif to a key, stopping spoofs" }
         ]}
       >
@@ -115,11 +115,11 @@ import { base } from '../lib/path'
         title="Gate"
         command="$ attest verify --policy .attest.json"
         subItems={[
-          { label: "Exit-code gate", description: "non-zero on any violation — CI and agent loops gate on it" },
-          { label: "Audit export", description: "attest export — one stable JSON document for compliance" }
+          { label: "Exit-code gate", description: "non-zero on any violation; CI and agent loops gate on it" },
+          { label: "Audit export", description: "attest export: one stable JSON document for compliance" }
         ]}
       >
-        Block a merge when a commit lacks the trust a policy demands — so an agent escalates instead of merging blind.
+        Block a merge when a commit lacks the trust a policy demands, so an agent escalates instead of merging blind.
       </Pillar>
     </ul>
   </div>
@@ -130,7 +130,7 @@ import { base } from '../lib/path'
     <header class="section-head">
       <p class="section-eyebrow">attest + augur</p>
       <h2 id="tl-h">augur scores the risk.<br><em>attest records the trust.</em></h2>
-      <p><a href="https://github.com/CorvidLabs/augur">augur</a> answers <em>how risky is this diff, and should a human look?</em> — but that verdict is ephemeral. attest makes it durable: a portable, optionally-signed record of what vetted a change, and a policy CI and agents can gate on. They compose over a pipe; attest never links augur.</p>
+      <p><a href="https://github.com/CorvidLabs/augur">augur</a> answers <em>how risky is this diff, and should a human look?</em>, but that verdict is ephemeral. attest makes it durable: a portable, optionally-signed record of what vetted a change, and a policy CI and agents can gate on. They compose over a pipe; attest never links augur.</p>
     </header>
     <div class="tl-pipe">
       <span aria-hidden="true" style="color: var(--accent-bright);">$</span>

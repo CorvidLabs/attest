@@ -5,14 +5,14 @@ trust a policy demands. This guide covers running it on the self-hosted macOS ru
 bundled `attest-verify` composite action, the augur → attest trust pipeline, and exporting an
 audit trail for compliance.
 
-> **Platform.** `attest` is **macOS-only for now** — the git-notes store, signing, and the
+> **Platform.** `attest` is **macOS-only for now**. The git-notes store, signing, and the
 > composite action all target macOS, and CI runs on the self-hosted **macOS ARM64** runners
 > (`runs-on: [self-hosted, macOS]`). Linux/Windows support is plausible (Foundation `Process` +
 > swift-crypto) but is not yet on the matrix.
 
 ## Running the binary directly
 
-The simplest integration — build `attest` and run `verify` against your range:
+The simplest integration is to build `attest` and run `verify` against your range:
 
 ```yaml
 jobs:
@@ -59,30 +59,30 @@ jobs:
 | `policy` | `.attest.json` | policy file path, relative to `working-directory`. |
 | `working-directory` | `.` | directory to run `attest verify` in. |
 
-The action has **no outputs** — its contract is the **exit code**. A policy violation propagates
+The action has **no outputs**; its contract is the **exit code**. A policy violation propagates
 `attest`'s non-zero exit and fails the job.
 
 > **Honest scope.** The action builds `attest` from *its own* checkout with `swift build -c
-> release`. Cross-repo packaging — shipping a prebuilt binary and installing it into other repos
-> without a Swift toolchain — is a deferred later step.
+> release`. Cross-repo packaging (shipping a prebuilt binary and installing it into other repos
+> without a Swift toolchain) is a deferred later step.
 
 ## The augur → attest trust pipeline
 
 [`augur`](https://github.com/CorvidLabs/augur) scores diff risk and emits a verdict (`proceed` /
 `review` / `block`) with a risk score. That verdict is *ephemeral*; `attest` makes it durable.
-They compose over a pipe — `attest` never links `augur`:
+They compose over a pipe; `attest` never links `augur`:
 
 ```sh
 # An agent scores the diff, records the verdict as an attestation, then gates on the policy:
 augur check --range main..HEAD --json \
   | attest sign --commit HEAD --reviewer agent:claude --from-augur - --tests-passed
 
-attest verify --commit HEAD || echo "trust policy not satisfied — escalating to a human"
+attest verify --commit HEAD || echo "trust policy not satisfied, escalating to a human"
 ```
 
 `--from-augur` copies augur's `verdict` and maps its `riskScore` (0...100) to `confidence = 1 -
 riskScore/100`. In an agent loop this turns a risk score into a recorded, optionally-signed trust
-artifact that the next step — or a human — can verify. A typical loop:
+artifact that the next step, or a human, can verify. A typical loop:
 
 1. `augur check --json` scores the change.
 2. `attest sign --from-augur -` records the verdict + confidence as an attestation (signed if the
@@ -97,7 +97,7 @@ run cannot keep clearing today's commit.
 ## Exporting an audit trail for compliance
 
 `attest export` produces a single, stable JSON document covering the *complete* provenance trail
-across a range — every commit, every attestation, each record's cryptographic verification
+across a range: every commit, every attestation, each record's cryptographic verification
 status, and (with `--policy`) a per-commit pass/fail. It is deterministic (sorted keys; commits
 oldest-first), so it diffs cleanly and is suitable for archival.
 
@@ -116,6 +116,6 @@ A natural CI step archives the trust trail alongside the build artifacts:
 ```
 
 `export` folds in `verify`'s policy verdict *and* the per-record signature checks, across the
-full range, in one machine-stable file — the durable record an auditor keeps. See
+full range, in one machine-stable file: the durable record an auditor keeps. See
 [cli.md](cli.md#attest-export) for the document shape and
 [`examples/05-audit-export.sh`](../examples/05-audit-export.sh) for an end-to-end run.

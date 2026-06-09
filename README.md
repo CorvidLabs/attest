@@ -1,13 +1,13 @@
 # attest
 
-**A verifiable trust record for code changes.** `attest` records signed attestations —
-*who or what reviewed a change, and at what confidence* — keyed to git commit SHAs and
-stored in **git notes**, so the trail travels with your repository across every git host.
+**A verifiable trust record for code changes.** `attest` records signed attestations (who
+or what reviewed a change, and at what confidence) keyed to git commit SHAs and stored in
+**git notes**, so the trail travels with your repository across every git host.
 
-It's built for the world where agents write most of the code. `augur` answers *how risky
-is this diff, and should a human look?* — but that verdict is ephemeral. `attest` makes it
-durable: a portable, optionally-signed record of what vetted a change, and a policy CI and
-agents can gate on. **augur scores the risk; attest records the trust.**
+Built for the world where agents write most of the code. `augur` answers *how risky is this
+diff, and should a human look?*, but that verdict is ephemeral. `attest` makes it durable: a
+portable, optionally-signed record of what vetted a change, and a policy CI and agents can
+gate on. **augur scores the risk; attest records the trust.**
 
 ```
 $ attest log
@@ -15,7 +15,7 @@ $ attest log
 attest · ledger
 
   commit 9f2c1a7b04  (2 attestations)
-    [ok] agent:claude  verdict:proceed  conf:92%  tests:ok  human:—  signed[ok]
+    [ok] agent:claude  verdict:proceed  conf:92%  tests:ok  human:-  signed[ok]
     [!] human:leif  verdict:review  conf:70%  tests:ok  human:ok  unsigned
         note: looked at the auth path, fine to ship
 ```
@@ -23,7 +23,7 @@ attest · ledger
 ## Why it exists
 
 Agents made code cheap to produce; the scarce resource is now *trust*. When an agent lands
-a change, there is no native, portable record of which agent or human vetted it — that
+a change, there is no native, portable record of which agent or human vetted it, and that
 context is lost the moment the PR merges. `attest` is that missing primitive:
 
 - **Humans** get an auditable trail: who signed off on what, and how sure they were.
@@ -40,7 +40,7 @@ context is lost the moment the PR merges. `attest` is that missing primitive:
 - **Signing is optional.** Out of the box, attestations are unsigned but valid. Run
   `attest keygen` once and pass `--sign` to attach an Ed25519 signature over a deterministic
   canonical serialization (sorted keys, signature field excluded) that anyone can verify.
-- **Policy** is plain JSON in `.attest.json` — no extra config language.
+- **Policy** is plain JSON in `.attest.json`. No extra config language.
 
 ## Install
 
@@ -59,7 +59,7 @@ Requires Swift 6 and `git` on `PATH`. Signing uses [swift-crypto](https://github
 # Record an attestation for the current commit (unsigned, zero setup):
 attest sign --commit HEAD --reviewer agent:claude --confidence 0.92 --tests-passed
 
-# Pipe augur straight in — verdict + confidence are auto-filled from its JSON:
+# Pipe augur straight in; verdict and confidence are auto-filled from its JSON:
 augur check --json | attest sign --commit HEAD --reviewer agent:claude --from-augur -
 
 # Optional: generate a key once, then sign records cryptographically:
@@ -91,7 +91,7 @@ augur check --range main..HEAD --json \
 
 ## Policy (`.attest.json`)
 
-All rules are optional with permissive defaults — an empty `{}` still requires one
+All rules are optional with permissive defaults. An empty `{}` still requires one
 attestation per commit and passes any commit that has one.
 
 ```json
@@ -114,19 +114,19 @@ attestation per commit and passes any commit that has one.
 |------|----------------------|
 | `requireAttestation` | the commit has no attestations. |
 | `requireTestsPassed` | no attestation reports `testsPassed`. |
-| `requireHumanApprovalWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is `humanApproved`. The human sign-off can be a *separate* attestation (e.g. `attest sign --reviewer human:leif --human-approved`) — it need not restate the verdict. |
+| `requireHumanApprovalWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is `humanApproved`. The human sign-off can be a *separate* attestation (e.g. `attest sign --reviewer human:leif --human-approved`); it need not restate the verdict. |
 | `requireSignature` | no *valid signed* attestation exists. |
 | `minimumConfidence` | the highest recorded confidence is below the floor. |
-| `allowedReviewers` | any attestation on the commit has a `reviewer` outside the allow-list. Matching per pattern: an **exact** match against the full reviewer string, *or* — when the pattern ends with `:` (e.g. `"human:"`) — a **prefix** match, so `"human:"` allows any `human:*` reviewer while `"agent:claude"` matches only exactly. A `nil`/empty list disables the rule. |
+| `allowedReviewers` | any attestation on the commit has a `reviewer` outside the allow-list. Matching per pattern: an **exact** match against the full reviewer string, *or* (when the pattern ends with `:`, e.g. `"human:"`) a **prefix** match, so `"human:"` allows any `human:*` reviewer while `"agent:claude"` matches only exactly. A `nil`/empty list disables the rule. |
 | `requireSignatureWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is *validly signed*. The signature can be a *separate* attestation. Not triggered when every verdict is below the level. |
 | `requireTestsPassedWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit reports `testsPassed`. The passing-tests record can be a *separate* attestation. Not triggered when every verdict is below the level. |
-| `trustedKeys` | any *signed* attestation on the commit fails to verify, or carries a `publicKey` that is **not** in this list of trusted base64 Ed25519 keys. Unsigned attestations are **unaffected** — `trustedKeys` constrains *which keys count as trusted*, it does **not** force signing (use `requireSignature` for that). A `nil`/empty list disables the rule. |
-| `signerPinning` | an attestation whose `reviewer` is a key in this `{reviewer: base64 pubkey}` map is **unsigned**, or **signed with a different key** (or tampered). Reviewers absent from the map are unaffected. This binds identity to a key — it is what stops a spoofed `reviewer: human:leif` that `allowedReviewers` (a string-only gate) cannot. A `nil`/empty map disables the rule. |
+| `trustedKeys` | any *signed* attestation on the commit fails to verify, or carries a `publicKey` that is **not** in this list of trusted base64 Ed25519 keys. Unsigned attestations are **unaffected**: `trustedKeys` constrains *which keys count as trusted*, it does **not** force signing (use `requireSignature` for that). A `nil`/empty list disables the rule. |
+| `signerPinning` | an attestation whose `reviewer` is a key in this `{reviewer: base64 pubkey}` map is **unsigned**, or **signed with a different key** (or tampered). Reviewers absent from the map are unaffected. This binds identity to a key, and it is what stops a spoofed `reviewer: human:leif` that `allowedReviewers` (a string-only gate) cannot. A `nil`/empty map disables the rule. |
 | `maxAgeDays` | the commit's **newest** attestation is older than this many whole days (or the commit has no attestations at all). A single fresh record clears the commit even alongside older ones; age is measured against an injected reference time, so a stale `block` from months ago can no longer rubber-stamp today's commit. A `nil` value disables the rule. |
 
 ### Preventing reviewer spoofing
 
-`allowedReviewers` gates the reviewer *string* — but nothing stops anyone from filing an
+`allowedReviewers` gates the reviewer *string*, but nothing stops anyone from filing an
 attestation that simply *claims* `reviewer: human:leif`. To bind an identity to a
 cryptographic key, use **`signerPinning`** (pin specific reviewers to specific keys) and/or
 **`trustedKeys`** (restrict which keys count as trusted at all):
@@ -150,7 +150,7 @@ attest sign --commit HEAD --reviewer human:leif --confidence 0.95 \
   --verdict review --human-approved --sign
 attest verify --commit HEAD            # exit 0
 
-# a spoof — claiming human:leif unsigned, or signed with someone else's key — FAILS:
+# a spoof (claiming human:leif unsigned, or signed with someone else's key) FAILS:
 attest sign --commit HEAD --reviewer human:leif --confidence 0.95   # unsigned claim
 attest verify --commit HEAD            # exit 1: reviewer human:leif is pinned but unsigned
 ```
@@ -159,7 +159,7 @@ The two rules compose:
 
 - **`signerPinning`** is per-reviewer: only reviewers in the map are constrained, and each must
   be signed with its *exact* pinned key. This is the rule that stops `human:leif` spoofing.
-- **`trustedKeys`** is global: it does **not** force signing (an unsigned record passes it — pair
+- **`trustedKeys`** is global: it does **not** force signing (an unsigned record passes it, so pair
   it with `requireSignature: true` to require a signature), but *any* record that **is** signed
   must verify and use a key from the trusted set. It bounds the universe of acceptable signers.
 
@@ -168,7 +168,7 @@ end-to-end in [`examples/07-signer-pinning.sh`](examples/07-signer-pinning.sh).
 
 ### Keeping trust fresh (`maxAgeDays`)
 
-Trust decays. A `block`/`review` verdict — or any sign-off — from months ago should not silently
+Trust decays. A `block`/`review` verdict, or any sign-off, from months ago should not silently
 keep clearing today's commit. `maxAgeDays` makes the commit's **newest** attestation prove
 recency: the commit passes only when some attestation is within `maxAgeDays` whole days of the
 verification time (a single fresh record clears it, even alongside older ones), and a commit with
@@ -207,7 +207,7 @@ Run the binary directly:
 - run: attest verify --range origin/main..HEAD --policy .attest.json
 ```
 
-…or use the bundled **composite GitHub Action** (`action.yml`). It builds `attest`
+Or use the bundled **composite GitHub Action** (`action.yml`). It builds `attest`
 from its own checkout and runs `attest verify`, failing the job on any policy
 violation:
 
@@ -230,20 +230,20 @@ jobs:
 | `policy` | `.attest.json` | Path to the policy file (relative to `working-directory`). |
 | `working-directory` | `.` | Directory to run `attest verify` in. |
 
-The action has no outputs; its contract is the **exit code** — a policy violation
+The action has no outputs; its contract is the **exit code**. A policy violation
 propagates `attest`'s non-zero exit and fails the job.
 
 > **Honest scope.** The action builds `attest` from *its own* checkout with
 > `swift build -c release` and runs on the self-hosted **macOS ARM64** runners
-> (`runs-on: [self-hosted, macOS]`). Cross-repo packaging — shipping a prebuilt
-> `attest` and installing it into *other* repos without a Swift toolchain — is a
+> (`runs-on: [self-hosted, macOS]`). Cross-repo packaging (shipping a prebuilt
+> `attest` and installing it into *other* repos without a Swift toolchain) is a
 > deferred later step.
 
 ### For agents
 
 ```sh
 augur check --range main..HEAD --json | attest sign --commit HEAD --reviewer agent:claude --from-augur -
-attest verify --commit HEAD || echo "trust policy not satisfied — escalating to a human"
+attest verify --commit HEAD || echo "trust policy not satisfied, escalating to a human"
 ```
 
 ## JSON shape
@@ -281,7 +281,7 @@ attest verify --commit HEAD || echo "trust policy not satisfied — escalating t
 
 `attest log` is a *human/diagnostic* listing. `attest export` is its archival
 counterpart: a single, **stable JSON document** covering the *complete*
-provenance trail across a commit range — every commit, every attestation, each
+provenance trail across a commit range: every commit, every attestation, each
 record's cryptographic **verification status**, and (with `--policy`) a
 per-commit pass/fail. Output is deterministic (sorted keys; commits oldest-first,
 the order `git rev-list --reverse` returns), so it diffs cleanly and is suitable
@@ -334,7 +334,7 @@ omit `verified`.
 
 **How it complements `log`/`verify`.** `log` is for a human reading the ledger;
 `verify` is an exit-code gate for CI / agent loops; `export` is the durable
-record an auditor keeps — it folds in `verify`'s policy verdict *and* the
+record an auditor keeps. It folds in `verify`'s policy verdict *and* the
 per-record signature checks `log` only badges, across the full range, in one
 machine-stable file. A natural CI / pre-commit archival step:
 
@@ -350,17 +350,17 @@ end-to-end in [`examples/05-audit-export.sh`](examples/05-audit-export.sh).
 
 In-depth docs live in [`docs/`](docs/):
 
-- [`docs/architecture.md`](docs/architecture.md) — the `AttestKit` vs CLI split, canonical
+- [`docs/architecture.md`](docs/architecture.md): the `AttestKit` vs CLI split, canonical
   serialization, git-notes storage, the signing model, and the verify / export flow.
-- [`docs/policy.md`](docs/policy.md) — every policy rule (all 11, including `maxAgeDays`) with JSON
+- [`docs/policy.md`](docs/policy.md): every policy rule (all 11, including `maxAgeDays`) with JSON
   examples, the `WhenVerdictAtLeast` semantics, and signer pinning.
-- [`docs/cli.md`](docs/cli.md) — every command and flag (`sign`, `verify`, `log`, `export`,
+- [`docs/cli.md`](docs/cli.md): every command and flag (`sign`, `verify`, `log`, `export`,
   `keygen`) with examples and exit codes.
-- [`docs/signing.md`](docs/signing.md) — `keygen`, Ed25519, optional signing,
+- [`docs/signing.md`](docs/signing.md): `keygen`, Ed25519, optional signing,
   `trustedKeys`/`signerPinning`, and preventing reviewer spoofing.
-- [`docs/ci-integration.md`](docs/ci-integration.md) — self-hosted macOS, the `attest-verify`
+- [`docs/ci-integration.md`](docs/ci-integration.md): self-hosted macOS, the `attest-verify`
   action, the augur → attest trust pipeline, and audit export for compliance.
-- [`docs/dogfooding.md`](docs/dogfooding.md) — **proof:** attest attests attest. Real captured
+- [`docs/dogfooding.md`](docs/dogfooding.md): **proof:** attest attests attest. Real captured
   output of attest recording + verifying provenance on its own commits (a PASS and a FAIL),
   plus the growing CI provenance ledger. Reproduce with [`examples/dogfood.sh`](examples/dogfood.sh).
 
@@ -389,7 +389,7 @@ uses `swift-argument-parser`.
 
 [`augur`](https://github.com/CorvidLabs/augur) is the upstream risk scorer:
 `augur check` emits `proceed | review | block` with a risk score. That verdict is
-*ephemeral*. `attest` makes it durable — it records that verdict (and anything
+*ephemeral*. `attest` makes it durable: it records that verdict (and anything
 else a reviewer asserts) as a portable, optionally-signed artifact, then gates on
 it. **augur scores the risk; attest records the trust.** They compose over a
 pipe; `attest` never links `augur`.
@@ -411,7 +411,7 @@ $ attest log --commit HEAD
 attest · ledger
 
   commit 9f2c1a7b04  (1 attestation)
-    [!] agent:claude  verdict:review  conf:55%  tests:ok  human:—  unsigned
+    [!] agent:claude  verdict:review  conf:55%  tests:ok  human:-  unsigned
 ```
 
 The full signed lifecycle (`keygen` → `--sign` → `signed[ok]` → `verify` against
@@ -425,8 +425,8 @@ The full signed lifecycle (`keygen` → `--sign` → `signed[ok]` → `verify` a
   `runs-on: [self-hosted, macOS]`). Linux/Windows support is plausible via
   Foundation `Process` + swift-crypto but is not yet on the matrix.
 - The composite action (`action.yml`) builds `attest` from its own checkout.
-  **Cross-repo packaging** — shipping a prebuilt binary and installing it into
-  other repos without a Swift toolchain — is a deferred later step.
+  **Cross-repo packaging** (shipping a prebuilt binary and installing it into
+  other repos without a Swift toolchain) is a deferred later step.
 - `attest` uses a single local Ed25519 key and embeds the public key on each
   record. It is not a CA: key distribution / web-of-trust and signer pinning are
   roadmap items.

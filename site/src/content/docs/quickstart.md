@@ -12,7 +12,7 @@ optional policy file.
 ## Requirements
 
 - **Swift 6** and **`git`** on `PATH`.
-- **macOS** — attest is macOS-only for now (the git-notes store, signing, and CI all target
+- **macOS**: attest is macOS-only for now (the git-notes store, signing, and CI all target
   macOS). Linux/Windows support is plausible but not yet on the matrix.
 - Signing uses Apple's [`swift-crypto`](https://github.com/apple/swift-crypto); the CLI uses
   [`swift-argument-parser`](https://github.com/apple/swift-argument-parser).
@@ -28,7 +28,7 @@ fledge run install
 
 ## 1. Record an attestation (unsigned, zero setup)
 
-Out of the box, attestations are **unsigned but valid** — no key required.
+Out of the box, attestations are **unsigned but valid**, with no key required.
 
 ```sh
 attest sign --commit HEAD --reviewer agent:claude --confidence 0.92 --tests-passed
@@ -49,10 +49,10 @@ attest log --range main..HEAD
 attest · ledger
 
   commit 9f2c1a7b04  (1 attestation)
-    [ok] agent:claude  verdict:—  conf:92%  tests:ok  human:—  unsigned
+    [ok] agent:claude  verdict:-  conf:92%  tests:ok  human:-  unsigned
 ```
 
-On a terminal this is colorized by meaning — green for `proceed`/verified, amber for
+On a terminal this is colorized by meaning: green for `proceed`/verified, amber for
 `review`, red for `block`/violations, cyan reviewers, dim for unsigned/absent cues.
 Control it with `--color auto|always|never`; piped or `--json` output stays plain, and
 `NO_COLOR` disables colour. See the [CLI reference](/attest/docs/cli#colored-output).
@@ -84,7 +84,7 @@ See [Signing & identity](/attest/docs/signing) for the full model.
 
 ## 5. Gate a commit against a policy
 
-Policy is plain JSON in `.attest.json`. Every rule is optional with permissive defaults — an empty
+Policy is plain JSON in `.attest.json`. Every rule is optional with permissive defaults, so an empty
 `{}` still requires one attestation per commit and passes any commit that has one.
 
 ```json
@@ -108,7 +108,7 @@ attest verify · [ok] PASS (3 commits checked)
 and agent loops gate on it.
 
 ```sh
-attest verify --commit HEAD || echo "trust policy not satisfied — escalating to a human"
+attest verify --commit HEAD || echo "trust policy not satisfied, escalating to a human"
 ```
 
 See the [Policy reference](/attest/docs/policy) for all 11 rules.
@@ -125,7 +125,7 @@ git fetch origin "refs/notes/*:refs/notes/*"
 
 ## Next steps
 
-- [Policy reference](/attest/docs/policy) — all 11 rules.
-- [CLI reference](/attest/docs/cli) — every command and flag.
-- [CI integration](/attest/docs/ci-integration) — the `attest-verify` action and the augur →
+- [Policy reference](/attest/docs/policy): all 11 rules.
+- [CLI reference](/attest/docs/cli): every command and flag.
+- [CI integration](/attest/docs/ci-integration): the `attest-verify` action and the augur →
   attest pipeline.

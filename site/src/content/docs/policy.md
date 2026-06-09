@@ -5,7 +5,7 @@ section: "Reference"
 order: 1
 ---
 
-A policy is plain JSON in `.attest.json` — no extra config language. Every rule is **optional with
+A policy is plain JSON in `.attest.json`, with no extra config language. Every rule is **optional with
 a permissive default**, so an empty `{}` policy still requires one attestation per commit and
 passes any commit that has one. `attest verify` evaluates the policy over a commit (or range) and
 exits non-zero on any violation.
@@ -14,7 +14,7 @@ exits non-zero on any violation.
 attest verify --range origin/main..HEAD --policy .attest.json
 ```
 
-A policy is evaluated against *all* of a commit's attestations as a set — the rules that talk
+A policy is evaluated against *all* of a commit's attestations as a set. The rules that talk
 about "any attestation" or "some attestation" are satisfied (or violated) by records anywhere on
 the commit, not necessarily the same one.
 
@@ -59,7 +59,7 @@ A `Verdict` is one of `"proceed"`, `"review"`, `"block"` (ordered `proceed < rev
 ### `requireAttestation`
 
 The baseline. When `true` (the default), a commit with zero attestations fails. Set it to `false`
-to let commits with no provenance pass — useful for a permissive starter policy on a repo that is
+to let commits with no provenance pass, useful for a permissive starter policy on a repo that is
 only beginning to record attestations.
 
 ### `requireTestsPassed` / `requireSignature`
@@ -79,16 +79,16 @@ attestation's `confidence` is below the floor, the commit fails.
 
 ### The `WhenVerdictAtLeast` rules
 
-Three rules are *conditional* — they only trigger when the recorded risk is high enough, then
+Three rules are *conditional*: they only trigger when the recorded risk is high enough, then
 demand a stronger form of evidence. The "at least" semantics use `Verdict` ordering, and the rule
 **triggers when any attestation on the commit carries a verdict at or above the threshold**:
 
-- **`requireHumanApprovalWhenVerdictAtLeast`** — once triggered, the commit must have *some*
+- **`requireHumanApprovalWhenVerdictAtLeast`**: once triggered, the commit must have *some*
   attestation that is `humanApproved`. The human sign-off can be a **separate** record that does
   not restate the verdict.
-- **`requireSignatureWhenVerdictAtLeast`** — once triggered, the commit must have *some* validly
+- **`requireSignatureWhenVerdictAtLeast`**: once triggered, the commit must have *some* validly
   signed attestation (which can be a separate record).
-- **`requireTestsPassedWhenVerdictAtLeast`** — once triggered, the commit must have *some*
+- **`requireTestsPassedWhenVerdictAtLeast`**: once triggered, the commit must have *some*
   attestation reporting `testsPassed: true` (which can be a separate CI record).
 
 None of them trigger when every verdict on the commit is below the threshold.
@@ -98,7 +98,7 @@ None of them trigger when every verdict on the commit is below the threshold.
 ```
 
 > An agent records `verdict: review, humanApproved: false`; a human files a separate
-> `--human-approved` record (verdict `nil`). The commit **passes** — the sign-off lives anywhere
+> `--human-approved` record (verdict `nil`). The commit **passes**: the sign-off lives anywhere
 > on the commit, not necessarily on the high-verdict record.
 
 ### `allowedReviewers`
@@ -107,7 +107,7 @@ A per-commit allow-list. When non-empty, **every** attestation's `reviewer` must
 pattern, per pattern:
 
 - an **exact** match against the full reviewer string, *or*
-- when the pattern ends with `:` (a role prefix such as `"human:"`), a **prefix** match — so
+- when the pattern ends with `:` (a role prefix such as `"human:"`), a **prefix** match, so
   `"human:"` allows any `human:*` reviewer, while `"agent:claude"` matches only exactly.
 
 ```json
@@ -117,7 +117,7 @@ pattern, per pattern:
 > Passes a commit whose reviewers are `human:leif` (prefix) and `agent:claude` (exact); fails a
 > commit with an `agent:gpt` attestation.
 
-`allowedReviewers` gates the reviewer **string only** — it does not stop someone *claiming* to be
+`allowedReviewers` gates the reviewer **string only**; it does not stop someone *claiming* to be
 `human:leif`. For that, use `signerPinning` (below).
 
 ### Signer pinning: `trustedKeys` + `signerPinning`
@@ -127,7 +127,7 @@ for the full threat model and lifecycle.
 
 - **`trustedKeys`** is a **global** set of trusted base64 Ed25519 public keys. When non-empty,
   *any* attestation that **is** signed must verify **and** carry a `publicKey` in the set; an
-  untrusted or invalid signed record fails. It does **not** force signing — an unsigned record
+  untrusted or invalid signed record fails. It does **not** force signing; an unsigned record
   passes it. Pair it with `requireSignature` to both require a signature and pin it to a trusted
   key.
 - **`signerPinning`** is a **per-reviewer** `{ reviewer: base64 pubkey }` map. Any attestation
@@ -152,7 +152,7 @@ within `maxAgeDays` **whole days** of a reference "now". Semantics:
 - Age is the integer-day quotient `(now − timestamp) / 86400`. The rule uses the **newest**
   attestation (smallest age), so a single fresh record clears the commit even alongside older
   ones.
-- The commit fails when that newest age is **strictly greater** than `maxAgeDays` — so age *equal*
+- The commit fails when that newest age is **strictly greater** than `maxAgeDays`, so age *equal*
   to the limit still passes. The detail reads `"newest attestation is N days old, exceeds
   maxAgeDays=M"`.
 - A commit with **no** attestations cannot satisfy freshness and fails with `"no attestation
@@ -164,13 +164,13 @@ within `maxAgeDays` **whole days** of a reference "now". Semantics:
 { "maxAgeDays": 90 }
 ```
 
-> A stale `block` verdict from six months ago can no longer rubber-stamp today's commit — the trust
+> A stale `block` verdict from six months ago can no longer rubber-stamp today's commit; the trust
 > record must be re-affirmed within the window.
 
 **Injected clock.** The reference time is *injected*, not read from the system clock inside the
 engine. `Verifier.verify(commits:now:)`, `Attest.verify(commits:policy:now:)`, and
 `Exporter.report(commits:policy:now:)` all take a `now` (Unix epoch seconds) that defaults to the
-current epoch at the CLI boundary. This keeps verification deterministic and testable — the same
+current epoch at the CLI boundary. This keeps verification deterministic and testable: the same
 attestation can verify fresh at one supplied `now` and stale at a later one. All other rules ignore
 `now`.
 

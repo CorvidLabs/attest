@@ -21,12 +21,12 @@ and notes ref are never touched).
 ## Why "attest attests attest" is the honest test
 
 A provenance tool is only trustworthy if it survives being pointed at itself. So
-we record an `agent:ci` attestation — the same shape CI records — on attest's own
+we record an `agent:ci` attestation (the same shape CI records) on attest's own
 commit, then show it both **passing** a realistic gate and **failing** a strict
 one. The failure is the interesting half: it proves attest actually catches a
 missing signature / human sign-off rather than rubber-stamping.
 
-## 1 — Record an attestation on attest's own HEAD
+## 1. Record an attestation on attest's own HEAD
 
 ```console
 $ attest sign --commit "$HEAD" --reviewer agent:ci \
@@ -42,14 +42,14 @@ $ attest log --commit "$HEAD"
 attest · ledger
 
   commit ab181efcdd  (1 attestation)
-    [ok] agent:ci  verdict:proceed  conf:90%  tests:ok  human:—  unsigned
+    [ok] agent:ci  verdict:proceed  conf:90%  tests:ok  human:-  unsigned
         note: attest dogfooding its own CI: build + 106 tests green
 ```
 
-It's `unsigned` and `human:—` on purpose — that's exactly what an automated CI
+It's `unsigned` and `human:-` on purpose. That's exactly what an automated CI
 attestation looks like, and it's what the strict policy below will catch.
 
-## 2 — Verify PASS under a lax policy (exit 0)
+## 2. Verify PASS under a lax policy (exit 0)
 
 A realistic CI gate: a commit must carry an attestation and report passing tests.
 That's satisfied, so verify exits `0`.
@@ -70,7 +70,7 @@ $ echo $?
 
 This is the same fatal gate CI runs against the committed `.attest.json`.
 
-## 3 — Verify FAIL under a strict policy (exit 1)
+## 3. Verify FAIL under a strict policy (exit 1)
 
 Now demand a cryptographic signature *and* a human sign-off. The `agent:ci`
 attestation has neither, so attest catches it on its own commit and exits `1`:
@@ -97,16 +97,16 @@ $ echo $?
 
 Those two `violations` lines are the real proof that the gate has teeth.
 
-## The CI dogfood — a growing provenance ledger
+## The CI dogfood: a growing provenance ledger
 
 The CI workflow wires this into every run on the self-hosted macOS runner. After
 `swift build`, `swift test`, and `fledge spec check` pass, it builds the release
 binary, records an unsigned `agent:ci` attestation on `$GITHUB_SHA`, runs
 `attest verify --policy .attest.json` as a **fatal** gate (printing the ledger
-and verdict), and — on a push to `main` only — best-effort `git push origin
+and verdict), and (on a push to `main` only) best-effort `git push origin
 refs/notes/attest` so the ledger accumulates over time. The job has
 `permissions: contents: write`; the push is guarded with `|| echo "note push
-skipped"` so a permissions or race issue can't redden CI — only the verify gate
+skipped"` so a permissions or race issue can't redden CI. Only the verify gate
 can fail the job.
 
 Inspect the ledger from a fresh clone:
@@ -128,14 +128,14 @@ examples/dogfood.sh
 The strict FAIL is expected and captured, so the script itself exits `0`:
 
 ```console
-lax    verify exit code: 0     (expected 0 — PASS)
-strict verify exit code: 1     (expected 1 — FAIL, caught)
-dogfood OK — attest attested attest, both outcomes as expected.
+lax    verify exit code: 0     (expected 0, PASS)
+strict verify exit code: 1     (expected 1, FAIL, caught)
+dogfood OK: attest attested attest, both outcomes as expected.
 ```
 
 ## Caveats
 
-- CI attestations are **unsigned** — no signing key is provisioned on the runner
+- CI attestations are **unsigned**: no signing key is provisioned on the runner
   (signing is optional by design). Provision a key with `attest keygen`, sign
   with `--sign`, and tighten `.attest.json` to make the ledger cryptographically
   verifiable.
