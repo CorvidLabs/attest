@@ -175,6 +175,8 @@ final class AttestKitTests: XCTestCase {
         XCTAssertFalse(blocked.passed)
         XCTAssertEqual(blocked.violations.first?.rule, "requireHumanApprovalWhenVerdictAtLeast")
 
+        // Back-compat: a single attestation that both carries the verdict and is
+        // human-approved still passes.
         let approved = Verifier(policy: policy).verify(commits: [
             (commit: "c1", attestations: [makeAttestation(verdict: .block, humanApproved: true)])
         ])
@@ -185,6 +187,49 @@ final class AttestKitTests: XCTestCase {
             (commit: "c1", attestations: [makeAttestation(verdict: .proceed, humanApproved: false)])
         ])
         XCTAssertTrue(proceed.passed)
+    }
+
+    func testHumanApprovalSatisfiedBySeparateAttestation() {
+        let policy = Policy(requireHumanApprovalWhenVerdictAtLeast: .review)
+        // An agent files the high verdict; a human files a separate sign-off that does
+        // not restate the verdict. The commit should pass.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", verdict: .review, humanApproved: false),
+                makeAttestation(reviewer: "human:leif", verdict: nil, humanApproved: true)
+            ])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    func testHumanApprovalFailsWithoutAnySignOff() {
+        let policy = Policy(requireHumanApprovalWhenVerdictAtLeast: .review)
+        // Only an agent review with no human approval anywhere on the commit.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", verdict: .review, humanApproved: false)
+            ])
+        ])
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "requireHumanApprovalWhenVerdictAtLeast")
+        XCTAssertEqual(
+            violation?.detail,
+            "verdict is at least review on this commit but no attestation is human-approved"
+        )
+    }
+
+    func testHumanApprovalNotTriggeredWhenAllVerdictsBelowThreshold() {
+        let policy = Policy(requireHumanApprovalWhenVerdictAtLeast: .review)
+        // Every verdict is below the threshold and no human approval exists: the rule
+        // does not trigger, so the commit passes.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", verdict: .proceed, humanApproved: false),
+                makeAttestation(reviewer: "agent:gpt", verdict: .proceed, humanApproved: false)
+            ])
+        ])
+        XCTAssertTrue(result.passed)
     }
 
     func testRequireSignaturePolicy() throws {
