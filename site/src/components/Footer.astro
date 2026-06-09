@@ -1,0 +1,56 @@
+---
+import { base } from '../lib/path'
+---
+<footer role="contentinfo">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <p class="logo"><span aria-hidden="true">🔏</span> attest</p>
+        <p class="foot-tagline">Signed provenance for code changes — a verifiable, policy-gated ledger of who reviewed what, and at what confidence.</p>
+        <p class="foot-tagline">A <a href="https://corvidlabs.xyz">CorvidLabs</a> project.</p>
+      </div>
+      <div class="foot-col">
+        <h3>Product</h3>
+        <a href={`${base}docs/quickstart`}>Quickstart</a>
+        <a href={`${base}docs/policy`}>Policy</a>
+        <a href="https://github.com/CorvidLabs/attest/blob/main/CHANGELOG.md">Changelog</a>
+      </div>
+      <div class="foot-col">
+        <h3>Resources</h3>
+        <a href={`${base}docs`}>Documentation</a>
+        <a href={`${base}docs/cli`}>CLI reference</a>
+        <a href="https://github.com/CorvidLabs/attest/blob/main/AGENTS.md">AGENTS.md</a>
+      </div>
+      <div class="foot-col">
+        <h3>Trust layer</h3>
+        <a href="https://github.com/CorvidLabs/attest">attest</a>
+        <a href="https://github.com/CorvidLabs/augur">augur</a>
+        <a href={`${base}docs/ci-integration`}>CI integration</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <p>© 2026 CorvidLabs · MIT licensed</p>
+      <p>augur scores the risk; attest records the trust <span aria-hidden="true">🔏</span></p>
+    </div>
+  </div>
+</footer>
+
+<style is:global>
+  footer { border-top: 1px solid var(--border); padding: 60px 0 30px;
+    color: var(--text-muted); font-size: 0.9375rem; }
+  .foot-grid { display: grid; grid-template-columns: 1.5fr repeat(3, 1fr);
+    gap: 40px; margin-bottom: 36px; }
+  .foot-brand { display: flex; flex-direction: column; gap: 12px; }
+  .foot-brand .logo { display: flex; align-items: center; gap: 8px;
+    color: var(--text); font-weight: 600; font-size: 1.0625rem; }
+  .foot-brand .foot-tagline { color: var(--text-muted); font-size: 0.9375rem; line-height: 1.5; }
+  .foot-brand .foot-tagline a { color: var(--accent-bright); display: inline-block; padding: 4px 0; }
+  .foot-brand .foot-tagline a:hover { text-decoration: underline; }
+  .foot-col h3 { color: var(--text); font-size: 0.9375rem; margin-bottom: 14px; font-weight: 600; }
+  .foot-col a { display: block; color: var(--text-muted); font-size: 0.9375rem; padding: 6px 0; }
+  .foot-col a:hover { color: var(--accent-bright); }
+  .foot-bottom { border-top: 1px solid var(--border); padding-top: 24px;
+    display: flex; justify-content: space-between; color: var(--text-dim);
+    font-size: 0.875rem; flex-wrap: wrap; gap: 12px; }
+  @media (max-width: 640px) { .foot-grid { grid-template-columns: 1fr; } }
+</style>

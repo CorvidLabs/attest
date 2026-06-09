@@ -1,0 +1,93 @@
+:root {
+  --bg: #0a0f0d;
+  --bg-raised: #0e1714;
+  --bg-raised-2: #131c19;
+  --border: #1c2b26;
+  --border-strong: #2a3d36;
+  --text: #f1f5f3;
+  --text-muted: #b8c8c1;
+  --text-dim: #8ba39a;
+  --accent: #10b981;
+  --accent-bright: #6ee7b7;
+  --accent-deep: #065f46;
+  --accent-muted: rgba(16, 185, 129, 0.10);
+  --accent-glow: rgba(16, 185, 129, 0.18);
+  --focus: #6ee7b7;
+  --radius: 10px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif: "Iowan Old Style", "Apple Garamond", "Baskerville", Georgia, serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  /* semantic "warn" — used for spoofed / stale / blocked trust signals */
+  --warn: #fbbf24;
+  --warn-muted: rgba(251, 191, 36, 0.10);
+  /* semantic "block" — a hard policy violation */
+  --block: #f87171;
+  --block-muted: rgba(248, 113, 113, 0.10);
+  --tap: 44px;
+  --max-w: 1180px;
+  --container-pad: 32px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: var(--font); font-size: 1rem; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+ul, ol { list-style: none; }
+a { color: inherit; text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+button { font-family: inherit; cursor: pointer; }
+pre, code { max-width: 100%; }
+pre { overflow-x: auto; max-width: 100%; box-sizing: border-box; }
+pre code { white-space: pre; word-break: normal; word-wrap: normal; }
+
+/* Shiki / astro syntax-highlighted blocks */
+pre.astro-code { max-width: 100%; box-sizing: border-box; overflow-x: auto; contain: layout; }
+
+/* Responsive tables */
+table { max-width: 100%; box-sizing: border-box; }
+.doc-body table, .art-body table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.container { max-width: var(--max-w); margin: 0 auto; padding: 0 var(--container-pad); box-sizing: border-box; }
+
+@media (max-width: 480px) {
+  :root { --container-pad: 16px; }
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute; top: -100px; left: 8px;
+  background: var(--accent); color: #06140e;
+  padding: 12px 18px; border-radius: 8px;
+  font-weight: 600; text-decoration: none; z-index: 100;
+  transition: top .15s;
+}
+.skip-link:focus { top: 8px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Touch / coarse pointer: enforce minimum 44px tap targets */
+@media (pointer: coarse) {
+  a, button {
+    min-height: 44px;
+  }
+  a.skip-link {
+    min-height: auto;
+  }
+}
