@@ -1,0 +1,12 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  build-test:
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      - run: swift test
+      - run: fledge spec check
