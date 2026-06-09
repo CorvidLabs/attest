@@ -108,7 +108,7 @@ attestation per commit and passes any commit that has one.
 |------|----------------------|
 | `requireAttestation` | the commit has no attestations. |
 | `requireTestsPassed` | no attestation reports `testsPassed`. |
-| `requireHumanApprovalWhenVerdictAtLeast` | a verdict is at/above the level but no attestation is `humanApproved`. |
+| `requireHumanApprovalWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is `humanApproved`. The human sign-off can be a *separate* attestation (e.g. `attest sign --reviewer human:leif --human-approved`) — it need not restate the verdict. |
 | `requireSignature` | no *valid signed* attestation exists. |
 | `minimumConfidence` | the highest recorded confidence is below the floor. |
 

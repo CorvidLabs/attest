@@ -11,8 +11,10 @@
 public struct Policy: Sendable, Codable, Equatable {
     /// Require at least one attestation per commit. Defaults to `true`.
     public var requireAttestation: Bool
-    /// Require `humanApproved == true` when the recorded verdict is at least this
-    /// level. `nil` disables the rule.
+    /// Require at least one human-approved attestation on a commit when any of its
+    /// attestations carries a verdict at or above this level. The human sign-off can
+    /// be a *separate* attestation (it need not restate the verdict). `nil` disables
+    /// the rule.
     public var requireHumanApprovalWhenVerdictAtLeast: Verdict?
     /// Require at least one attestation with `testsPassed == true`.
     public var requireTestsPassed: Bool
@@ -172,12 +174,18 @@ public struct Verifier: Sendable {
         }
 
         if let threshold = policy.requireHumanApprovalWhenVerdictAtLeast {
-            let triggering = attestations.filter { ($0.verdict ?? .proceed) >= threshold }
-            if !triggering.isEmpty, !triggering.contains(where: { $0.humanApproved }) {
+            // The rule triggers when *any* attestation carries a verdict at or above the
+            // threshold. It is satisfied by a human sign-off recorded *anywhere* on the
+            // commit — a human typically files a separate `humanApproved` attestation
+            // rather than restating the verdict — so we check all attestations, not just
+            // the one carrying the high verdict.
+            let triggered = attestations.contains { ($0.verdict ?? .proceed) >= threshold }
+            let humanApproved = attestations.contains { $0.humanApproved }
+            if triggered, !humanApproved {
                 violations.append(Violation(
                     commit: commit,
                     rule: "requireHumanApprovalWhenVerdictAtLeast",
-                    detail: "verdict is at least \(threshold.rawValue) but no attestation is human-approved"
+                    detail: "verdict is at least \(threshold.rawValue) on this commit but no attestation is human-approved"
                 ))
             }
         }

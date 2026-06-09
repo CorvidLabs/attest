@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 2
+version: 3
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -135,6 +135,10 @@ Two design commitments make it usable everywhere:
 - A signature produced by `Ed25519Signer.sign` verifies via `Ed25519Verifier.verify`; any
   mutation of a signed record's content (other than the signature pair) fails verification.
 - Multiple attestations per commit are permitted; stores append rather than replace.
+- `requireHumanApprovalWhenVerdictAtLeast` is evaluated across all of a commit's
+  attestations as a set: it triggers when any attestation's verdict is at or above the
+  threshold, and is satisfied when any attestation on the commit is `humanApproved`. The
+  triggering verdict and the human sign-off need not be the same record.
 - `Policy` decodes from JSON with permissive defaults: an empty `{}` policy still requires
   an attestation and passes any commit that has one.
 - `AugurVerdict.parse` maps `riskScore` (0...100) to `confidence = 1 - riskScore/100`,
@@ -166,8 +170,12 @@ Two design commitments make it usable everywhere:
   signature that verifies, and tampering with any signed field fails verification.
 - With `.attest.json` requiring `requireTestsPassed: true`, `attest verify --range A..B`
   exits non-zero for any commit lacking a passing-tests attestation, zero otherwise.
-- `requireHumanApprovalWhenVerdictAtLeast: "review"` fails a `block`-verdict commit unless
-  some attestation is `humanApproved`; a `proceed`-verdict commit is unaffected.
+- `requireHumanApprovalWhenVerdictAtLeast: "review"` fails a commit that has any
+  attestation with a verdict at or above `review` (e.g. `review` or `block`) unless *some*
+  attestation on that commit is `humanApproved`. The human sign-off may be a separate
+  attestation that does not restate the verdict: an agent record `verdict:review,
+  humanApproved:false` plus a human record `humanApproved:true` (verdict `nil`) on the same
+  commit passes. A commit whose verdicts are all below the threshold is unaffected.
 - `attest export --range A..B` emits one JSON `AuditReport` covering every commit in the
   range (oldest first), each attestation enriched with a `verification` status, suitable for
   compliance archival — distinct from `attest log`, which is a human/diagnostic listing.
@@ -208,3 +216,10 @@ Two design commitments make it usable everywhere:
   per-commit policy verdict via the existing `Verifier`. Adds the `attest export` CLI
   subcommand. Purely additive: no change to canonical serialization, signatures, storage, or
   any existing API.
+- v3: Corrected `requireHumanApprovalWhenVerdictAtLeast` semantics. The rule now evaluates a
+  commit's attestations as a set: it is satisfied when *any* attestation on the commit is
+  `humanApproved`, rather than requiring the human approval to live on the same record that
+  carries the high verdict. This lets a human file a separate `--human-approved` attestation
+  (without restating the verdict) to clear an agent's `review`/`block` verdict, fixing a
+  footgun where a legitimate separate sign-off was rejected. No API, schema, or canonical
+  serialization change; only the `Verifier` evaluation and the violation message wording.
