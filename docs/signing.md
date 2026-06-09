@@ -1,7 +1,7 @@
 # Signing & Identity
 
 `attest` signs attestations with **Ed25519** (via Apple's
-[`swift-crypto`](https://github.com/apple/swift-crypto)). Signing is **optional** — an unsigned
+[`swift-crypto`](https://github.com/apple/swift-crypto)). Signing is **optional**: an unsigned
 attestation is still a valid provenance record, so the tool works with zero setup. Signing is
 what lets a *policy* trust a record and bind it to an identity.
 
@@ -25,7 +25,7 @@ attest keygen
 
 When you pass `--sign` to `attest sign`, the signer:
 
-1. Computes the **canonical bytes** of the attestation — sorted-key JSON that deliberately
+1. Computes the **canonical bytes** of the attestation: sorted-key JSON that deliberately
    **excludes** the `signature` and `publicKey` fields (see
    [architecture.md](architecture.md#canonical-serialization-the-signature-contract)).
 2. Produces a detached Ed25519 signature over those bytes.
@@ -38,18 +38,18 @@ attest sign --commit HEAD --reviewer human:leif --confidence 0.95 \
 
 `Ed25519Verifier.verify` reverses this: it recomputes the canonical bytes and checks the embedded
 signature against the embedded public key. Because the canonical form excludes the signature
-pair, attaching a signature never changes the signed bytes — but any mutation of the *content*
+pair, attaching a signature never changes the signed bytes, but any mutation of the *content*
 (confidence, verdict, note, timestamp, reviewer, commit) makes verification fail. An unsigned
 record verifies as "not signed", never as "valid".
 
 ## Preventing reviewer spoofing
 
-A reviewer is just a string — `agent:claude`, `human:leif`. Nothing stops someone from filing an
+A reviewer is just a string like `agent:claude` or `human:leif`. Nothing stops someone from filing an
 attestation that simply *claims* `reviewer: human:leif`. `allowedReviewers` gates the reviewer
 string, but it cannot tell a genuine `human:leif` from an impostor. Two policy rules close that
 gap by binding identity to a key.
 
-### `signerPinning` — per-reviewer key binding
+### `signerPinning`: per-reviewer key binding
 
 `signerPinning` is a `{ reviewer: base64 pubkey }` map. Any attestation whose `reviewer` is a key
 in the map **must** be signed with that exact pinned public key and verify. A pinned reviewer
@@ -68,16 +68,16 @@ attest sign --commit HEAD --reviewer human:leif --confidence 0.95 \
   --verdict review --human-approved --sign
 attest verify --commit HEAD            # exit 0
 
-# a spoof — claiming human:leif unsigned, or signed with another key — FAILS:
+# a spoof (claiming human:leif unsigned, or signed with another key) FAILS:
 attest sign --commit HEAD --reviewer human:leif --confidence 0.95   # unsigned claim
 attest verify --commit HEAD            # exit 1: reviewer human:leif is pinned but unsigned
 ```
 
-### `trustedKeys` — a global allow-list of signers
+### `trustedKeys`: a global allow-list of signers
 
 `trustedKeys` is a set of trusted base64 Ed25519 public keys. When non-empty, *any* record that
 **is** signed must verify **and** carry a `publicKey` in the set; an untrusted or invalid signed
-record fails. Crucially, `trustedKeys` does **not** force signing — an unsigned record passes it.
+record fails. Crucially, `trustedKeys` does **not** force signing; an unsigned record passes it.
 It bounds the *universe* of acceptable signers.
 
 ```json
@@ -115,7 +115,7 @@ end-to-end in [`examples/07-signer-pinning.sh`](../examples/07-signer-pinning.sh
 - `attest` uses a single local Ed25519 key per machine and embeds the public key on each record.
   It is **not a CA**: key distribution, rotation, web-of-trust, and revocation are roadmap items.
 - Trust today is expressed by pasting public keys into the policy (`trustedKeys` /
-  `signerPinning`). That is deliberate — the policy file is the source of truth for *who counts*.
+  `signerPinning`). That is deliberate: the policy file is the source of truth for *who counts*.
 - Combine signing with the `maxAgeDays` freshness rule (see [policy.md](policy.md)) so a trusted
-  signature also has to be *recent* — a signed sign-off from months ago will not silently keep
+  signature also has to be *recent*. A signed sign-off from months ago will not silently keep
   passing.

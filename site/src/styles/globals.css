@@ -1,5 +1,5 @@
 :root {
-  /* Brand palette — a refined crimson/rose. The near-black background carries a faint
+  /* Brand palette: a refined crimson/rose. The near-black background carries a faint
      warm-red tint (rather than the previous green) so the whole surface reads on-brand. */
   --bg: #100a0c;
   --bg-raised: #170e11;
@@ -9,7 +9,7 @@
   --text: #f5f1f2;
   --text-muted: #ccbcc0;
   --text-dim: #a3939a;
-  /* Accent: a polished rose-red (#e11d48 family) — softer and more premium than a harsh
+  /* Accent: a polished rose-red (#e11d48 family), softer and more premium than a harsh
      fire-engine red, while still reading as confident/trustworthy. Contrast checked AA. */
   --accent: #e11d48;
   --accent-bright: #fb7185;
@@ -21,19 +21,19 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --serif: "Iowan Old Style", "Apple Garamond", "Baskerville", Georgia, serif;
   --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  /* semantic "warn" — used for spoofed / stale / blocked trust signals */
+  /* semantic "warn": used for spoofed / stale / blocked trust signals */
   --warn: #fbbf24;
   --warn-muted: rgba(251, 191, 36, 0.10);
-  /* semantic "block" — a hard policy violation */
+  /* semantic "block": a hard policy violation */
   --block: #f87171;
   --block-muted: rgba(248, 113, 113, 0.10);
-  /* semantic "ok" — verified / PASS / signed success cues. Stays GREEN even on the
+  /* semantic "ok": verified / PASS / signed success cues. Stays GREEN even on the
      red-branded site: it mirrors the CLI's semantic terminal colour, where green means
      "verified". Brand/accent went red; success indicators deliberately did not. */
   --ok: #34d399;
   --ok-bright: #6ee7b7;
   --ok-muted: rgba(52, 211, 153, 0.12);
-  /* semantic "info" — cyan, mirroring the CLI's reviewer-identity colour. Like the
+  /* semantic "info": cyan, mirroring the CLI's reviewer-identity colour. Like the
      ok/warn/block cues, this is a meaning colour, independent of the red brand. */
   --info: #67e8f9;
   --tap: 44px;

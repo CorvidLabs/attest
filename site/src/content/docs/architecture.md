@@ -16,7 +16,7 @@ and the verify / export flow.
 - **`AttestKit`** (`Sources/AttestKit/`) is the engine library. It owns the data model
   (`Attestation`, `Verdict`), the canonical serialization, Ed25519 signing/verification, the
   `Policy` + `Verifier`, the `Exporter`, augur ingestion, and the storage protocol. It depends only
-  on Apple's [`swift-crypto`](https://github.com/apple/swift-crypto) — no third-party packages, no
+  on Apple's [`swift-crypto`](https://github.com/apple/swift-crypto): no third-party packages, no
   networking, no global state.
 - **`attest`** (`Sources/attest/`) is the CLI. It uses
   [`swift-argument-parser`](https://github.com/apple/swift-argument-parser), resolves git revisions
@@ -67,7 +67,7 @@ An `Attestation` (`Models.swift`) is a provenance record keyed to a git commit S
 | `signature` / `publicKey` | optional base64 Ed25519 pair (present only when signed) |
 
 `Verdict` is `Comparable` (`proceed < review < block`) so a policy can express "at least `review`".
-Multiple attestations can accrue on a single commit — a store appends, never replaces.
+Multiple attestations can accrue on a single commit; a store appends, never replaces.
 
 ## Canonical serialization: the signature contract
 
@@ -94,7 +94,7 @@ Two consequences hold by design and are covered by tests:
 `NotesStore` (`NotesStore.swift`) implements `AttestationStore` over git notes under a dedicated
 ref, `refs/notes/attest`:
 
-- Each commit's note holds **JSON Lines** — one attestation per line — so appending a new
+- Each commit's note holds **JSON Lines** (one attestation per line), so appending a new
   attestation is concatenating a line, and each record stays individually parseable
   (`AttestationCodec`).
 - Notes are **portable**: no service, no database. They travel with `git push origin
@@ -102,7 +102,7 @@ ref, `refs/notes/attest`:
 - `NotesStore` shells out to `git` via `Process`, reads stdout, and treats a missing note (a
   non-zero exit from `git notes show`) as "no attestations" rather than an error.
 - Reading attestations is strict: a corrupt JSON line surfaces `AttestError.malformedRecord` rather
-  than being silently dropped — corruption in an audit ledger must be loud, not lossy.
+  than being silently dropped. Corruption in an audit ledger must be loud, not lossy.
 
 The `InMemoryStore` fake mirrors the same protocol for tests and dry runs, guarded by a lock.
 
@@ -120,18 +120,18 @@ Signing is **optional** end to end (`Ed25519Signer.swift`, `KeyStore.swift`):
   content fails verification.
 
 An unsigned attestation is a fully valid record. Signing is what lets a policy *trust* a record
-(`requireSignature`, `trustedKeys`, `signerPinning`) — see [Signing & identity](/attest/docs/signing).
+(`requireSignature`, `trustedKeys`, `signerPinning`). See [Signing & identity](/attest/docs/signing).
 
 ## The verify flow
 
 `attest verify` (and the `Attest.verify` facade) does:
 
-1. Resolve the target commits — a single commit, an oldest-first range
+1. Resolve the target commits: a single commit, an oldest-first range
    (`NotesStore.commits(inRange:)`), or `HEAD`.
 2. Load the `Policy` from `.attest.json` (or the permissive default if absent).
 3. For each commit, read its attestations and run `Verifier.evaluate`, collecting `Violation`s.
 4. Return a `VerificationResult` (`passed`, `checkedCommits`, `violations`). The CLI exits non-zero
-   when `passed` is false — that exit code is the contract CI and agent loops read.
+   when `passed` is false; that exit code is the contract CI and agent loops read.
 
 The verifier injects a reference time `now` (defaulted to the current epoch at the CLI boundary)
 used only by the `maxAgeDays` freshness rule. See [Policy reference](/attest/docs/policy) for every
@@ -140,16 +140,16 @@ rule.
 ## The export flow
 
 `attest export` (`Exporter.swift`) produces a single, stable JSON `AuditReport` for compliance
-archival — distinct from `attest log` (a human/diagnostic listing):
+archival, distinct from `attest log` (a human/diagnostic listing):
 
 1. The caller resolves the range to an ordered commit list (oldest first), exactly as `verify` /
-   `log` do — the exporter does **no** git walking of its own.
+   `log` do. The exporter does **no** git walking of its own.
 2. For each commit, every attestation is paired with a computed `VerificationStatus` (`signed`, and
    for signed records `verified`), reusing the same `Ed25519Verifier`.
 3. When a `Policy` is supplied, each commit gets a `policyPassed` and the report a top-level
    `allPassed`, computed with the same `Verifier` as `attest verify`.
 
 Output is deterministic: commits in supplied order, records in store order (oldest first), sorted
-JSON keys — so identical inputs yield byte-identical JSON and the document diffs cleanly. See
+JSON keys, so identical inputs yield byte-identical JSON and the document diffs cleanly. See
 [CLI reference](/attest/docs/cli) for flags and [CI integration](/attest/docs/ci-integration) for
 the archival step.

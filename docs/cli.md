@@ -15,7 +15,7 @@ attest <subcommand> [options]
 | Command | Exit 0 | Exit 1 | Other non-zero |
 |---------|--------|--------|----------------|
 | `verify` | every checked commit passes the policy | a commit violates the policy | usage / git / I/O error |
-| `sign`, `log`, `export`, `keygen` | success | — | usage / git / I/O error |
+| `sign`, `log`, `export`, `keygen` | success | n/a | usage / git / I/O error |
 
 `attest verify`'s exit code is its contract: a policy violation propagates exit `1`, which is
 what CI and agent loops gate on. The other commands exit non-zero only on an actual error
@@ -31,12 +31,12 @@ Record an attestation for a commit, written to git notes (`refs/notes/attest`).
 |------|---------|-------------|
 | `--commit <rev>` | `HEAD` | the commit to attest (SHA or revision). |
 | `--reviewer <id>` | *(required)* | who or what reviewed, e.g. `agent:claude`, `human:leif`. |
-| `--confidence <0..1>` | — | reviewer confidence; clamped to `0...1`. |
-| `--verdict <v>` | — | recorded verdict: `proceed`, `review`, or `block`. |
+| `--confidence <0..1>` | none | reviewer confidence; clamped to `0...1`. |
+| `--verdict <v>` | none | recorded verdict: `proceed`, `review`, or `block`. |
 | `--tests-passed` | off | record that the change's tests passed. |
 | `--human-approved` | off | record that a human approved (implies confidence `1.0` if none given). |
-| `--note <text>` | — | optional free-text note. |
-| `--from-augur <file\|->` | — | read `augur check --json` and merge `verdict` + derived `confidence`. |
+| `--note <text>` | none | optional free-text note. |
+| `--from-augur <file\|->` | none | read `augur check --json` and merge `verdict` + derived `confidence`. |
 | `--sign` | off | sign the attestation with the key from `attest keygen`. |
 | `--json` | off | emit the stored attestation as JSON. |
 
@@ -57,19 +57,19 @@ augur check --json | attest sign --commit HEAD --reviewer agent:claude --from-au
 ### `--from-augur`
 
 Reads `augur check --json` from a file or `-` (stdin) and merges it: augur's `verdict` is copied,
-and its `riskScore` (0...100) becomes `confidence = 1 - riskScore/100` (so risk 45 → confidence
+and its `riskScore` (0...100) becomes `confidence = 1 - riskScore/100` (so risk 45 gives confidence
 0.55). See [signing.md](signing.md) and the project README for the full augur pipeline.
 
 ---
 
 ## `attest verify`
 
-Exit non-zero if any commit in a range violates the policy — the gate for CI and agent loops.
+Exit non-zero if any commit in a range violates the policy. This is the gate for CI and agent loops.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--range <a..b>` | — | a git range to check, e.g. `origin/main..HEAD`. |
-| `--commit <rev>` | — | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
+| `--range <a..b>` | none | a git range to check, e.g. `origin/main..HEAD`. |
+| `--commit <rev>` | none | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
 | `--policy <path>` | `.attest.json` | path to the policy file (falls back to the permissive default if absent). |
 | `--json` | off | emit machine-readable JSON instead of the human report. |
 | `--color <auto\|always\|never>` | `auto` | colorize the human report. `auto` colours only when stdout is a TTY and `NO_COLOR` is unset; `--json` and piped output stay plain. |
@@ -97,8 +97,8 @@ List recorded attestations, human-readable or JSON. This is the **default** subc
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--range <a..b>` | — | limit to a git range. |
-| `--commit <rev>` | — | limit to a single commit. |
+| `--range <a..b>` | none | limit to a git range. |
+| `--commit <rev>` | none | limit to a single commit. |
 | `--json` | off | emit machine-readable JSON. |
 | `--color <auto\|always\|never>` | `auto` | colorize the listing. `auto` colours only when stdout is a TTY and `NO_COLOR` is unset; `--json` and piped output stay plain. |
 
@@ -122,9 +122,9 @@ compliance archival. Always JSON (no `--json` flag).
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--range <a..b>` | — | a git range to export. |
-| `--commit <rev>` | — | export a single commit; with neither, exports every attested commit. |
-| `--policy <path>` | — | optional; when set, each commit's pass/fail is included. |
+| `--range <a..b>` | none | a git range to export. |
+| `--commit <rev>` | none | export a single commit; with neither, exports every attested commit. |
+| `--policy <path>` | none | optional; when set, each commit's pass/fail is included. |
 | `--pretty` / `--no-pretty` | `--pretty` | pretty-print (default) or emit compact JSON. |
 
 ```sh
@@ -135,7 +135,7 @@ attest export --range main..HEAD --no-pretty > audit.json  # compact, for storag
 ```
 
 Output is deterministic: commits appear oldest-first (the order `git rev-list --reverse`
-returns), records in store order, and JSON keys are sorted — so it diffs cleanly. Every commit in
+returns), records in store order, and JSON keys are sorted, so it diffs cleanly. Every commit in
 the range is represented, including commits with no attestations. Each record carries a
 `verification` block: `signed`, and for signed records whether the signature `verified` (a
 tampered or wrong-key record reports `verified: false`; unsigned records omit `verified`).

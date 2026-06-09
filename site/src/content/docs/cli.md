@@ -1,6 +1,6 @@
 ---
 title: "CLI reference"
-description: "Every attest command and flag — sign, verify, log, export, keygen — with examples and exit codes."
+description: "Every attest command and flag: sign, verify, log, export, keygen, with examples and exit codes."
 section: "Reference"
 order: 2
 ---
@@ -20,7 +20,7 @@ attest <subcommand> [options]
 The human-readable output of `verify` and `log` is **semantically colored**: green for
 PASS / `proceed` / verified signatures, amber for `review`, red for FAIL / `block` /
 violations, cyan for reviewer identities, and dim for secondary text (unsigned records,
-absent `tests`/`human`, notes). Colour is *meaning*, not decoration — it is independent
+absent `tests`/`human`, notes). Colour is *meaning*, not decoration; it is independent
 of any brand colour.
 
 Colour is controlled by `--color <mode>` on `verify` and `log`:
@@ -32,7 +32,7 @@ Colour is controlled by `--color <mode>` on `verify` and `log`:
 | `never` | never emit ANSI escape codes. |
 
 In `auto`, piping or redirecting (`attest log | less`, `> file`) and any `--json` output
-stay **plain** — byte-identical to `--color never` — so scripts and pipelines are
+stay **plain** (byte-identical to `--color never`), so scripts and pipelines are
 unaffected. Setting the `NO_COLOR` environment variable disables colour in `auto` mode.
 
 ```sh
@@ -46,7 +46,7 @@ attest log --json                       # JSON is always plain
 | Command | Exit 0 | Exit 1 | Other non-zero |
 |---------|--------|--------|----------------|
 | `verify` | every checked commit passes the policy | a commit violates the policy | usage / git / I/O error |
-| `sign`, `log`, `export`, `keygen` | success | — | usage / git / I/O error |
+| `sign`, `log`, `export`, `keygen` | success | n/a | usage / git / I/O error |
 
 `attest verify`'s exit code is its contract: a policy violation propagates exit `1`, which is what
 CI and agent loops gate on. The other commands exit non-zero only on an actual error (invalid
@@ -60,12 +60,12 @@ Record an attestation for a commit, written to git notes (`refs/notes/attest`).
 |------|---------|-------------|
 | `--commit <rev>` | `HEAD` | the commit to attest (SHA or revision). |
 | `--reviewer <id>` | *(required)* | who or what reviewed, e.g. `agent:claude`, `human:leif`. |
-| `--confidence <0..1>` | — | reviewer confidence; clamped to `0…1`. |
-| `--verdict <v>` | — | recorded verdict: `proceed`, `review`, or `block`. |
+| `--confidence <0..1>` | none | reviewer confidence; clamped to `0…1`. |
+| `--verdict <v>` | none | recorded verdict: `proceed`, `review`, or `block`. |
 | `--tests-passed` | off | record that the change's tests passed. |
 | `--human-approved` | off | record that a human approved (implies confidence `1.0` if none given). |
-| `--note <text>` | — | optional free-text note. |
-| `--from-augur <file\|->` | — | read `augur check --json` and merge `verdict` + derived `confidence`. |
+| `--note <text>` | none | optional free-text note. |
+| `--from-augur <file\|->` | none | read `augur check --json` and merge `verdict` + derived `confidence`. |
 | `--sign` | off | sign the attestation with the key from `attest keygen`. |
 | `--json` | off | emit the stored attestation as JSON. |
 
@@ -92,12 +92,12 @@ pipeline.
 
 ## `attest verify`
 
-Exit non-zero if any commit in a range violates the policy — the gate for CI and agent loops.
+Exit non-zero if any commit in a range violates the policy. This is the gate for CI and agent loops.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--range <a..b>` | — | a git range to check, e.g. `origin/main..HEAD`. |
-| `--commit <rev>` | — | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
+| `--range <a..b>` | none | a git range to check, e.g. `origin/main..HEAD`. |
+| `--commit <rev>` | none | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
 | `--policy <path>` | `.attest.json` | path to the policy file (falls back to the permissive default if absent). |
 | `--json` | off | emit machine-readable JSON instead of the human report. |
 | `--color <mode>` | `auto` | colorize the human report: `auto` (TTY only), `always`, or `never`. |
@@ -137,8 +137,8 @@ List recorded attestations, human-readable or JSON. This is the **default** subc
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--range <a..b>` | — | limit to a git range. |
-| `--commit <rev>` | — | limit to a single commit. |
+| `--range <a..b>` | none | limit to a git range. |
+| `--commit <rev>` | none | limit to a single commit. |
 | `--json` | off | emit machine-readable JSON. |
 | `--color <mode>` | `auto` | colorize the listing: `auto` (TTY only), `always`, or `never`. |
 
@@ -150,7 +150,7 @@ attest log --commit HEAD --json   # one commit, machine-readable
 attest log --range main..HEAD
 ```
 
-The listing groups attestations by commit. Each row is colorized by meaning — the
+The listing groups attestations by commit. Each row is colorized by meaning: the
 verdict badge and `verdict:`/`conf:` tints track severity (green `proceed`, amber
 `review`, red `block`), reviewer identities are cyan, `tests:ok` / `human:ok` /
 `signed[ok]` are green, and unsigned / absent cues are dim:
@@ -159,7 +159,7 @@ verdict badge and `verdict:`/`conf:` tints track severity (green `proceed`, ambe
 attest · ledger
 
   commit abc1234567  (2 attestations)
-    [ok] agent:claude  verdict:proceed  conf:95%  tests:ok  human:—  unsigned
+    [ok] agent:claude  verdict:proceed  conf:95%  tests:ok  human:-  unsigned
     [!] human:leif  verdict:review  conf:72%  tests:ok  human:ok  signed[ok]
         note: reviewed the migration by hand
 ```
@@ -174,9 +174,9 @@ compliance archival. Always JSON (no `--json` flag).
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--range <a..b>` | — | a git range to export. |
-| `--commit <rev>` | — | export a single commit; with neither, exports every attested commit. |
-| `--policy <path>` | — | optional; when set, each commit's pass/fail is included. |
+| `--range <a..b>` | none | a git range to export. |
+| `--commit <rev>` | none | export a single commit; with neither, exports every attested commit. |
+| `--policy <path>` | none | optional; when set, each commit's pass/fail is included. |
 | `--pretty` / `--no-pretty` | `--pretty` | pretty-print (default) or emit compact JSON. |
 
 ```sh
@@ -187,7 +187,7 @@ attest export --range main..HEAD --no-pretty > audit.json  # compact, for storag
 ```
 
 Output is deterministic: commits appear oldest-first (the order `git rev-list --reverse` returns),
-records in store order, and JSON keys are sorted — so it diffs cleanly. Every commit in the range
+records in store order, and JSON keys are sorted, so it diffs cleanly. Every commit in the range
 is represented, including commits with no attestations. Each record carries a `verification` block:
 `signed`, and for signed records whether the signature `verified` (a tampered or wrong-key record
 reports `verified: false`; unsigned records omit `verified`).
