@@ -1,0 +1,5 @@
+[registry]
+name = "attest"
+
+[specs]
+provenance-ledger = "specs/provenance-ledger/provenance-ledger.spec.md"

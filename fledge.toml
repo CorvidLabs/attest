@@ -1,0 +1,23 @@
+# fledge.toml - attest project task definitions.
+# Docs: https://github.com/CorvidLabs/fledge#task-runner
+
+[tasks]
+build = "swift build"
+test = "swift test"
+release-build = "swift build -c release"
+spec = "fledge spec check"
+format = "fledge plugins run swift-format -- lint Sources Tests"
+check = "fledge run build && fledge run test && fledge run spec"
+ci = "fledge run check"
+
+[tasks.run]
+cmd = "swift run attest"
+description = "Build and run attest against the current repository"
+
+[tasks.install]
+cmd = "swift build -c release && install -m 0755 .build/release/attest /usr/local/bin/attest"
+description = "Build a release binary and install it to /usr/local/bin"
+
+[tasks.examples]
+cmd = "for f in examples/*.sh; do echo \"== $f ==\"; sh \"$f\" || exit 1; done"
+description = "Run the runnable example scripts against throwaway repos"
