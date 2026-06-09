@@ -9,8 +9,12 @@ jobs:
     runs-on: [self-hosted, macOS]
     # contents: write lets the dogfood step push the growing provenance ledger
     # to refs/notes/attest on pushes to main (no-op on PRs — see the step below).
+    # statuses: write lets the step below post a GitHub commit status named
+    # "attest" so provenance surfaces as a check on the commit and PR pages
+    # (git notes themselves are not shown in the GitHub web UI).
     permissions:
       contents: write
+      statuses: write
     steps:
       - uses: actions/checkout@v4
       - run: swift build
@@ -42,16 +46,53 @@ jobs:
             --note "CI: swift build + swift test + fledge spec check all green"
 
       - name: Dogfood — verify the CI commit against .attest.json (fatal gate)
+        id: verify
+        env:
+          # The PR head SHA on a pull_request event, the pushed SHA otherwise.
+          # This is the SHA the commit status is attached to below.
+          ATTEST_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           ATTEST=".build/release/attest"
-          echo "== ledger for $GITHUB_SHA =="
-          "$ATTEST" log --commit "$GITHUB_SHA" --color always
+          echo "== ledger for $ATTEST_SHA =="
+          "$ATTEST" log --commit "$ATTEST_SHA" --color always
           echo "== verify against the committed policy (fatal) =="
-          # No `|| true`: a policy violation here is a real failure. The
-          # committed .attest.json is permissive enough that the attestation we
-          # just recorded satisfies it.
-          "$ATTEST" verify --commit "$GITHUB_SHA" --policy .attest.json --color always
+          # The committed .attest.json is permissive enough that the attestation
+          # we just recorded satisfies it. We capture the exit code so the next
+          # step can publish a commit status, then re-raise it so a real policy
+          # violation still fails the job.
+          "$ATTEST" verify --commit "$ATTEST_SHA" --policy .attest.json --color always
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      # Surface provenance in the GitHub web UI. Git notes (refs/notes/attest)
+      # are NOT shown in the GitHub UI, so we publish a commit status named
+      # "attest" that appears as a check on the commit and PR pages. This runs
+      # even when verify fails (so a failure is reported), and is best-effort so
+      # a token hiccup can never redden CI on its own.
+      - name: Post attest commit status
+        if: always() && steps.verify.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEST_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          VERIFY_CODE: ${{ steps.verify.outputs.exit_code }}
+        run: |
+          set -uo pipefail
+          if [ "${VERIFY_CODE:-1}" = "0" ]; then
+            STATE="success"
+            DESC="provenance verified"
+          else
+            STATE="failure"
+            DESC="policy not satisfied"
+          fi
+          echo "posting attest commit status: $STATE ($DESC) on $ATTEST_SHA"
+          gh api -X POST "repos/${{ github.repository }}/statuses/$ATTEST_SHA" \
+            -f state="$STATE" \
+            -f context="attest" \
+            -f description="$DESC" \
+            -f target_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            || echo "status post skipped"
 
       # PREFERRED real dogfooding: push the notes ref so attest's repo
       # accumulates a provenance ledger over time. Guarded to push only on a
