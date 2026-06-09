@@ -19,16 +19,66 @@ diff, and should a human look?*, but that verdict is ephemeral. `attest` makes i
 portable, optionally-signed record of what vetted a change, and a policy CI and agents can
 gate on. **augur scores the risk; attest records the trust.**
 
-```
-$ attest log
+## Quickstart
 
+**Install** (macOS, Swift 6, `git` on `PATH`):
+
+```sh
+swift build -c release && install -m 0755 .build/release/attest /usr/local/bin/attest
+```
+
+**Try it instantly (no setup).** This builds the binary, records an attestation against a
+throwaway `/tmp` repo, and reads it back. It touches nothing of yours:
+
+```sh
+bash examples/01-basic-attestation.sh
+```
+
+More runnable, self-contained examples (each against a throwaway repo) are catalogued in
+[`examples/README.md`](examples/README.md).
+
+**The core flow.** Generate a key once, sign an attestation on `HEAD`, read the ledger,
+then gate on a policy (output below is real):
+
+```sh
+$ attest keygen
+attest · wrote private key to ~/.config/attest/key (0600)
+public key: SP19xVbn1MrVF3Ips/aQDR1sHAjHGb9iVzG9ePtluA0=
+
+$ attest sign --commit HEAD --reviewer human:you --confidence 0.9 --tests-passed --sign
+attest · recorded human:you on 77fe5ac11c (signed)
+
+$ attest log --commit HEAD
 attest · ledger
 
-  commit 9f2c1a7b04  (2 attestations)
-    [ok] agent:claude  verdict:proceed  conf:92%  tests:ok  human:-  signed[ok]
-    [!] human:leif  verdict:review  conf:70%  tests:ok  human:ok  unsigned
-        note: looked at the auth path, fine to ship
+  commit 77fe5ac11c  (1 attestation)
+    [·] human:you  verdict:-  conf:90%  tests:ok  human:-  signed[ok]
 ```
+
+Verify against a policy. A floor it clears PASSES (exit 0); a stricter floor FAILS (exit 1),
+the non-zero exit a CI job or agent loop gates on:
+
+```sh
+$ echo '{ "requireTestsPassed": true }' > lax.json
+$ attest verify --commit HEAD --policy lax.json
+attest verify · [ok] PASS (1 commit checked)        # exit 0
+
+$ echo '{ "minimumConfidence": 0.95 }' > strict.json
+$ attest verify --commit HEAD --policy strict.json
+attest verify · [x] FAIL (1 commit checked)
+
+  violations:
+    x 77fe5ac11c  minimumConfidence: highest confidence 0.9 is below floor 0.95
+                                                    # exit 1
+```
+
+**Where next:**
+
+- [Documentation site](https://corvidlabs.github.io/attest/): the rendered docs.
+- [`docs/cli.md`](docs/cli.md): every command and flag (`sign`, `verify`, `log`, `export`, `keygen`).
+- [`docs/policy.md`](docs/policy.md): every policy rule with JSON examples.
+- [`docs/signing.md`](docs/signing.md): keys, Ed25519, signing, and preventing reviewer spoofing.
+- [`examples/README.md`](examples/README.md): the full catalog of live examples.
 
 ## Why it exists
 

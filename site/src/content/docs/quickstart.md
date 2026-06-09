@@ -26,6 +26,18 @@ install -m 0755 .build/release/attest /usr/local/bin/attest
 fledge run install
 ```
 
+## Try it instantly (no setup)
+
+This builds the binary, records an attestation against a throwaway `/tmp` repo, and reads it
+back. It touches nothing of yours:
+
+```sh
+bash examples/01-basic-attestation.sh
+```
+
+Nine more runnable, self-contained examples (each against a throwaway repo) are catalogued in
+[`examples/README.md`](https://github.com/CorvidLabs/attest/blob/main/examples/README.md).
+
 ## 1. Record an attestation (unsigned, zero setup)
 
 Out of the box, attestations are **unsigned but valid**, with no key required.
@@ -49,7 +61,7 @@ attest log --range main..HEAD
 attest · ledger
 
   commit 9f2c1a7b04  (1 attestation)
-    [ok] agent:claude  verdict:-  conf:92%  tests:ok  human:-  unsigned
+    [·] agent:claude  verdict:-  conf:92%  tests:ok  human:-  unsigned
 ```
 
 On a terminal this is colorized by meaning: green for `proceed`/verified, amber for
