@@ -1,0 +1,4 @@
+attest verify · [x] FAIL (2 commits checked)
+
+  violations:
+    x abc1234567  requireTestsPassed: no attestation reports passing tests

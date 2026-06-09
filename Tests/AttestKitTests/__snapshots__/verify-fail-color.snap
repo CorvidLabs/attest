@@ -1,0 +1,4 @@
+[1mattest verify ·[0m [1;31m[x] FAIL[0m [2m(2 commits checked)[0m
+
+[33m  violations:[0m
+[31m    x abc1234567  requireTestsPassed: no attestation reports passing tests[0m

@@ -52,6 +52,11 @@ attest · ledger
     [ok] agent:claude  verdict:—  conf:92%  tests:ok  human:—  unsigned
 ```
 
+On a terminal this is colorized by meaning — green for `proceed`/verified, amber for
+`review`, red for `block`/violations, cyan reviewers, dim for unsigned/absent cues.
+Control it with `--color auto|always|never`; piped or `--json` output stays plain, and
+`NO_COLOR` disables colour. See the [CLI reference](/attest/docs/cli#colored-output).
+
 ## 3. Pipe augur straight in
 
 `attest sign --from-augur <file|->` reads `augur check --json` and merges it: augur's `verdict` is
@@ -93,6 +98,10 @@ Policy is plain JSON in `.attest.json`. Every rule is optional with permissive d
 
 ```sh
 attest verify --range origin/main..HEAD --policy .attest.json
+```
+
+```
+attest verify · [ok] PASS (3 commits checked)
 ```
 
 `attest verify`'s **exit code** is its contract: it exits non-zero on any policy violation, so CI

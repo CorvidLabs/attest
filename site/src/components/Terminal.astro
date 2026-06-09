@@ -37,11 +37,19 @@ const { title = 'terminal', ariaLabel = 'Terminal example' } = Astro.props
   .term-line { white-space: pre-wrap; word-break: break-word; }
   .term-prompt { color: var(--accent-bright); }
   .term-out { color: var(--text-muted); }
-  /* Successful command output stays SEMANTIC green (PASS / "✓"), matching the CLI's
-     terminal colours; only the brand prompt/cursor went red. */
+  /* Semantic spans mirror the CLI's ANSI palette one-to-one: green = pass/proceed/
+     verified, amber = review, red = fail/block, cyan = reviewer identity, dim =
+     secondary/unsigned text. Only the brand prompt/cursor went red. */
   .term-good { color: var(--ok-bright); }
+  .term-good-bold { color: var(--ok-bright); font-weight: 700; }
   .term-warn { color: var(--warn); }
   .term-bad { color: var(--block); }
+  .term-bad-bold { color: var(--block); font-weight: 700; }
+  /* cyan reviewer identities, matching the CLI's reviewer colour */
+  .term-info { color: var(--info); }
+  /* dim secondary text (unsigned, tests:—, human:—, notes, counts) */
+  .term-dim { color: var(--text-dim); }
+  .term-bold { color: var(--text); font-weight: 700; }
   .term-comment { color: var(--text-dim); font-style: italic; }
   .blink { display: inline-block; width: 8px; height: 16px;
     background: var(--accent-bright); vertical-align: middle; margin-left: 2px; }
