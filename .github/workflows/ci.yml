@@ -30,15 +30,24 @@ jobs:
         run: swift build -c release
 
       - name: Dogfood — attest attests this CI commit
+        env:
+          # Use the same SHA the verify step and commit status use: the PR head
+          # on a pull_request, the pushed SHA otherwise. Signing the merge SHA on
+          # a PR would leave the verified head un-attested.
+          ATTEST_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           ATTEST=".build/release/attest"
-          echo "attest is attesting its own CI commit $GITHUB_SHA"
+          # Fetch the existing ledger so the new attestation appends to it and the
+          # later push is a fast-forward. A plain checkout does not fetch notes,
+          # so without this the push is rejected as non-fast-forward.
+          git fetch origin "+refs/notes/attest:refs/notes/attest" 2>/dev/null || true
+          echo "attest is attesting its own CI commit $ATTEST_SHA"
           # Record an agent:ci attestation on the commit under test. Signing in
           # CI is optional (no key is provisioned) — an unsigned attestation is a
           # valid record, which is the whole point of attest.
           "$ATTEST" sign \
-            --commit "$GITHUB_SHA" \
+            --commit "$ATTEST_SHA" \
             --reviewer "agent:ci" \
             --confidence 0.9 \
             --tests-passed \
