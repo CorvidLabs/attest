@@ -4,8 +4,9 @@
 
 ### Other
 
-- Add: attest self-dogfooding — attest records provenance attestations on its OWN commits. CI (self-hosted macOS) attests each commit with an `agent:ci` record and gates it against `.attest.json` (fatal), pushing the growing ledger to `refs/notes/attest` on `main`. New `examples/dogfood.sh` (PASS under a lax / FAIL under a strict policy on attest's real HEAD) and `docs/dogfooding.md` with real captured proof.
-- Add: colorful terminal output for `attest log`/`verify` — semantic, TTY/`NO_COLOR`-aware ANSI colour via a dependency-free `Colorizer`, gated by `--color auto|always|never`; piped and `--json` output stays plain.
+- Chore: surface the policy trust-model caveats in the docs, tidy the malformed-record error and `attest log` corrupt-note handling, and scrub the changelog.
+- Add: attest self-dogfooding. attest records provenance attestations on its OWN commits. CI (self-hosted macOS) attests each commit with an `agent:ci` record and gates it against `.attest.json` (fatal), pushing the growing ledger to `refs/notes/attest` on `main`. New `examples/dogfood.sh` (PASS under a lax / FAIL under a strict policy on attest's real HEAD) and `docs/dogfooding.md` with real captured proof.
+- Add: colorful terminal output for `attest log` and `verify`. Semantic, TTY/`NO_COLOR`-aware ANSI colour via a dependency-free `Colorizer`, gated by `--color auto|always|never`; piped and `--json` output stays plain.
 
 ## [v0.1.0] - 2026-06-09
 
@@ -16,7 +17,8 @@
 - Add: allowedReviewers, requireSignatureWhenVerdictAtLeast, requireTestsPassedWhenVerdictAtLeast policy rules (#4) (e4616d2)
 - Fix: --human-approved no longer requires --confidence (#3) (eff5cf6)
 - Fix: human-approval policy accepts a separate human-approved attestation (#2) (d6cfe71)
-- Add: attest export — range-wide JSON audit trail (#1) (25ec6c2)
+- Add: attest export, range-wide JSON audit trail (#1) (25ec6c2)
 - Add: attest-verify composite action, signed-lifecycle example, default policy (8e0972f)
-- Add: attest — signed provenance & attestation ledger for code changes (dd68f53)
-
+- Add: attest, signed provenance & attestation ledger for code changes (dd68f53)
+</content>
+</invoke>

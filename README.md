@@ -154,6 +154,20 @@ augur check --range main..HEAD --json \
 All rules are optional with permissive defaults. An empty `{}` still requires one
 attestation per commit and passes any commit that has one.
 
+> **Trust-model warning, read first.** A gate is only as strong as the rule that ties a
+> record to a key:
+>
+> - `requireSignature: true` **alone does NOT bind identity.** It proves only that *some*
+>   key signed, not *whose*. An attacker can sign with their own key while claiming
+>   `reviewer: human:leif` and pass. To actually stop reviewer spoofing, use **`signerPinning`**
+>   (binds a reviewer to a key) or **`trustedKeys` + `requireSignature` together**. `trustedKeys`
+>   alone does not force signing; `requireSignature` alone does not check the key.
+> - `minimumConfidence` and `requireTestsPassed` are satisfied by **any** attestation on the
+>   commit, including an injected one. Combine them with **`allowedReviewers`** or
+>   **`signerPinning`** to bind that evidence to reviewers you trust.
+>
+> See [`docs/policy.md`](docs/policy.md) for the full trust model.
+
 ```json
 {
   "requireAttestation": true,
