@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 5
+version: 6
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -47,7 +47,7 @@ Two design commitments make it usable everywhere:
 | `Attest.init(store:)` | Construct the facade over an `AttestationStore`. |
 | `Attest.record(_:signer:)` | Record an attestation, optionally signing it first; returns the stored record. |
 | `Attest.attestations(for:)` | All attestations recorded for a commit, oldest first. |
-| `Attest.verify(commits:policy:)` | Check commits' attestations against a `Policy`, returning a `VerificationResult`. |
+| `Attest.verify(commits:policy:now:)` | Check commits' attestations against a `Policy`, returning a `VerificationResult`. `now` (Unix epoch seconds) is the injected reference time for the `maxAgeDays` freshness rule; defaults to the current epoch. |
 
 ### Model & Serialization
 
@@ -91,15 +91,16 @@ Two design commitments make it usable everywhere:
 
 | Export | Description |
 |--------|-------------|
-| `Policy.init(requireAttestation:requireHumanApprovalWhenVerdictAtLeast:requireTestsPassed:requireSignature:minimumConfidence:allowedReviewers:requireSignatureWhenVerdictAtLeast:requireTestsPassedWhenVerdictAtLeast:trustedKeys:signerPinning:)` | Construct a gate; all rules optional with permissive defaults. |
+| `Policy.init(requireAttestation:requireHumanApprovalWhenVerdictAtLeast:requireTestsPassed:requireSignature:minimumConfidence:allowedReviewers:requireSignatureWhenVerdictAtLeast:requireTestsPassedWhenVerdictAtLeast:trustedKeys:signerPinning:maxAgeDays:)` | Construct a gate; all rules optional with permissive defaults. |
 | `Policy.allowedReviewers` | When set, every attestation on a commit must have a `reviewer` matching one of the patterns (exact, or role-prefix when the pattern ends with `:`). |
 | `Policy.requireSignatureWhenVerdictAtLeast` | When any attestation's verdict is at/above this level, require at least one *valid signed* attestation on the commit. |
 | `Policy.requireTestsPassedWhenVerdictAtLeast` | When any attestation's verdict is at/above this level, require at least one attestation with `testsPassed == true` on the commit. |
 | `Policy.trustedKeys` | When set (non-empty), every *signed* attestation on a commit must verify and carry a `publicKey` in this list of trusted base64 Ed25519 keys; untrusted or invalid signed records fail. Unsigned records are unaffected (governed by `requireSignature*`). |
 | `Policy.signerPinning` | When set (non-empty), any attestation whose `reviewer` is a key in this `[reviewer: base64 pubkey]` map must be signed with the pinned key and verify; a pinned reviewer signed with a different key or left unsigned fails. Stops reviewer spoofing. |
+| `Policy.maxAgeDays` | When set, the commit must carry at least one attestation whose `timestamp` is within `maxAgeDays` whole days of an injected reference time (`now`); a commit whose newest attestation is older, or which has none, fails. `nil` disables the rule. |
 | `Policy.default` | The default policy: require an attestation, nothing more. |
 | `Policy.load(fromFile:)` | Load a policy from a `.attest.json` file. |
-| `Verifier.init(policy:)` / `verify(commits:)` | Evaluate a policy over commits' attestations. |
+| `Verifier.init(policy:)` / `verify(commits:now:)` | Evaluate a policy over commits' attestations; `now` (Unix epoch seconds, defaulting to the current epoch) is the injected clock for the `maxAgeDays` freshness rule. |
 | `AugurVerdict.parse(_:)` | Parse `augur check --json`, mapping `riskScore` to `confidence = 1 - riskScore/100`. |
 | `Reporter.renderLog(_:)` / `renderVerification(_:)` | Human-readable terminal rendering. |
 
@@ -108,7 +109,7 @@ Two design commitments make it usable everywhere:
 | Export | Description |
 |--------|-------------|
 | `Exporter.init(store:)` | Construct the aggregator over an `AttestationStore`. |
-| `Exporter.report(commits:policy:)` | Build an `AuditReport` over the given commits; with a `Policy`, include per-commit pass/fail. |
+| `Exporter.report(commits:policy:now:)` | Build an `AuditReport` over the given commits; with a `Policy`, include per-commit pass/fail. `now` (Unix epoch seconds, defaulting to the current epoch) is the injected clock for the policy's `maxAgeDays` freshness rule. |
 | `AuditReport.formatVersion` | The stable integer format version of the report document. |
 | `AuditReport.jsonString(pretty:)` / `jsonData(pretty:)` | Stable, sorted-key JSON of the report (pretty by default). |
 | `VerificationStatus.evaluate(_:)` | Compute a record's `signed` flag and (for signed records) whether it verifies. |
@@ -172,6 +173,19 @@ Two design commitments make it usable everywhere:
   different key, or signed but tampered fails the commit. Reviewers absent from the map are
   unaffected. This is the rule that actually stops a spoofed `reviewer: human:leif`, which
   `allowedReviewers` (a string gate) cannot. A `nil` or empty map disables the rule.
+- `maxAgeDays`, when non-`nil`, is a freshness gate: the commit passes only when at least one of
+  its attestations is recent. An attestation's age is the whole-day quotient
+  `(now - timestamp) / 86400` (integer division on Unix epoch seconds), and the rule uses the
+  *newest* attestation (smallest age), so a single fresh record clears a commit even when older
+  records are also present. The commit fails when that newest age is strictly greater than
+  `maxAgeDays`, with the detail `"newest attestation is N days old, exceeds maxAgeDays=M"`. A commit
+  with no attestations cannot satisfy freshness and fails with `"no attestation exists to satisfy
+  maxAgeDays=M"`. A timestamp at or in the future yields a non-positive age and is always within the
+  window; a sub-day difference rounds down to `0` days. Crucially, the reference time `now` is
+  **injected** into `Verifier.verify(commits:now:)` (threaded through `Attest.verify` and
+  `Exporter.report`) rather than read from the system clock inside the evaluation logic, so
+  verification is deterministic and testable; the CLI supplies the current epoch at its boundary.
+  A `nil` value disables the rule.
 - `Policy` decodes from JSON with permissive defaults: an empty `{}` policy still requires
   an attestation and passes any commit that has one.
 - `AugurVerdict.parse` maps `riskScore` (0...100) to `confidence = 1 - riskScore/100`,
@@ -229,6 +243,13 @@ Two design commitments make it usable everywhere:
   that is unsigned or signed with a different key — closing the spoof that `allowedReviewers`
   (a string-only gate) leaves open. An attestation by `agent:claude` (a reviewer not in the map) is
   unaffected and passes whether signed or not.
+- `maxAgeDays: 30` passes a commit whose newest attestation was recorded within 30 days of the
+  reference `now` (e.g. 10 days ago, or exactly 30 days ago — age at the limit is within the window),
+  but fails one whose newest attestation is 31+ days old with `"newest attestation is 31 days old,
+  exceeds maxAgeDays=30"`. A commit with a mix of stale and fresh records passes on the fresh one. A
+  commit with no attestations fails with `"no attestation exists to satisfy maxAgeDays=30"`. Because
+  `now` is injected, the same attestation verifies fresh at one supplied `now` and stale at a later
+  one — the rule never reads the wall clock during evaluation.
 - `attest export --range A..B` emits one JSON `AuditReport` covering every commit in the
   range (oldest first), each attestation enriched with a `verification` status, suitable for
   compliance archival — distinct from `attest log`, which is a human/diagnostic listing.
@@ -295,3 +316,13 @@ Two design commitments make it usable everywhere:
   reviewer must be signed with its pinned key and verify, so an unsigned or wrong-key claim to a
   pinned reviewer fails — this is what actually stops reviewer spoofing. Both rules reuse the
   existing `Ed25519Verifier` (`signerPinning` via the `expectedPublicKey` parameter).
+- v6: One additional, optional freshness policy rule (permissive-default off, decoded with
+  `decodeIfPresent`, purely additive — no canonical serialization, signature, or storage change).
+  `maxAgeDays: Int` requires a commit to carry at least one attestation within `maxAgeDays` whole
+  days of a reference "now"; a commit whose newest attestation is older, or which has none, fails
+  with a clear detail. The reference time is **injected** as a new `now` parameter on
+  `Verifier.verify(commits:now:)`, `Attest.verify(commits:policy:now:)`, and
+  `Exporter.report(commits:policy:now:)` (all defaulting to the current epoch at the CLI boundary)
+  rather than read from the system clock inside the evaluation logic, keeping verification
+  deterministic and testable. Adding the `now` parameter is source-compatible (defaulted); all other
+  rules ignore it.

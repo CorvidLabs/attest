@@ -13,6 +13,7 @@ final class AttestKitTests: XCTestCase {
         verdict: Verdict? = .proceed,
         testsPassed: Bool = true,
         humanApproved: Bool = false,
+        timestamp: Int? = nil,
         note: String? = nil
     ) -> Attestation {
         Attestation(
@@ -22,9 +23,14 @@ final class AttestKitTests: XCTestCase {
             verdict: verdict,
             testsPassed: testsPassed,
             humanApproved: humanApproved,
-            timestamp: now,
+            timestamp: timestamp ?? now,
             note: note
         )
+    }
+
+    /// `maxAgeDays` measured in seconds against the fixture's `now`.
+    private func daysAgo(_ days: Int) -> Int {
+        now - days * 86_400
     }
 
     // MARK: - Canonical serialization
@@ -528,6 +534,349 @@ final class AttestKitTests: XCTestCase {
         XCTAssertTrue(result.passed)
     }
 
+    // MARK: - Policy: maxAgeDays (freshness)
+
+    func testMaxAgeDaysPassesWithFreshAttestation() {
+        let policy = Policy(maxAgeDays: 30)
+        // Recorded 10 days before `now`: well within the 30-day window.
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: daysAgo(10))])],
+            now: now
+        )
+        XCTAssertTrue(result.passed)
+        XCTAssertTrue(result.violations.isEmpty)
+    }
+
+    func testMaxAgeDaysFailsWithStaleAttestation() {
+        let policy = Policy(maxAgeDays: 30)
+        // Recorded 45 days before `now`: older than the 30-day window.
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: daysAgo(45))])],
+            now: now
+        )
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "maxAgeDays")
+        XCTAssertEqual(violation?.detail, "newest attestation is 45 days old, exceeds maxAgeDays=30")
+    }
+
+    func testMaxAgeDaysPassesWhenAnyAttestationIsFresh() {
+        let policy = Policy(maxAgeDays: 30)
+        // A mix: two stale records and one fresh — the newest (fresh) clears the commit.
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", timestamp: daysAgo(90)),
+                makeAttestation(reviewer: "agent:gpt", timestamp: daysAgo(60)),
+                makeAttestation(reviewer: "human:leif", timestamp: daysAgo(5))
+            ])],
+            now: now
+        )
+        XCTAssertTrue(result.passed)
+    }
+
+    func testMaxAgeDaysNotTriggeredWhenNil() {
+        // The rule is off by default; an ancient attestation passes when maxAgeDays is nil.
+        let policy = Policy()
+        XCTAssertNil(policy.maxAgeDays)
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: daysAgo(10_000))])],
+            now: now
+        )
+        XCTAssertTrue(result.passed)
+    }
+
+    func testMaxAgeDaysBoundaryExactlyAtLimitPasses() {
+        let policy = Policy(maxAgeDays: 30)
+        // Exactly 30 days old: age == limit, which is within the window (not greater than).
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: daysAgo(30))])],
+            now: now
+        )
+        XCTAssertTrue(result.passed)
+    }
+
+    func testMaxAgeDaysBoundaryJustOverLimitFails() {
+        let policy = Policy(maxAgeDays: 30)
+        // 31 days old: one whole day past the limit, so it fails.
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: daysAgo(31))])],
+            now: now
+        )
+        XCTAssertFalse(result.passed)
+        XCTAssertEqual(result.violations.first?.detail, "newest attestation is 31 days old, exceeds maxAgeDays=30")
+    }
+
+    func testMaxAgeDaysSubDayDifferenceIsZeroDaysAndPasses() {
+        let policy = Policy(maxAgeDays: 0)
+        // A few hours old rounds down to 0 whole days, satisfying even maxAgeDays=0.
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: now - 3_600)])],
+            now: now
+        )
+        XCTAssertTrue(result.passed)
+    }
+
+    func testMaxAgeDaysFutureTimestampIsAlwaysFresh() {
+        let policy = Policy(maxAgeDays: 30)
+        // A timestamp in the future yields a non-positive age, always within the window.
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [makeAttestation(timestamp: now + 86_400)])],
+            now: now
+        )
+        XCTAssertTrue(result.passed)
+    }
+
+    func testMaxAgeDaysFailsWhenNoAttestationsExist() {
+        // With no attestations, freshness cannot be satisfied; the rule fires its own violation.
+        let policy = Policy(requireAttestation: false, maxAgeDays: 30)
+        let result = Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [])],
+            now: now
+        )
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first { $0.rule == "maxAgeDays" }
+        XCTAssertEqual(violation?.detail, "no attestation exists to satisfy maxAgeDays=30")
+    }
+
+    func testMaxAgeDaysUsesInjectedClockNotSystemClock() {
+        // Determinism: the same inputs at two different injected "now"s give opposite verdicts,
+        // proving the rule reads the injected clock, never `Date()`.
+        let policy = Policy(maxAgeDays: 30)
+        let attestation = makeAttestation(timestamp: 1_000_000_000)
+        let freshNow = 1_000_000_000 + 10 * 86_400   // 10 days later
+        let staleNow = 1_000_000_000 + 90 * 86_400   // 90 days later
+        XCTAssertTrue(Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [attestation])], now: freshNow
+        ).passed)
+        XCTAssertFalse(Verifier(policy: policy).verify(
+            commits: [(commit: "c1", attestations: [attestation])], now: staleNow
+        ).passed)
+    }
+
+    func testMaxAgeDaysThroughFacadeVerify() throws {
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1", timestamp: daysAgo(45)))
+        let result = try Attest(store: store).verify(
+            commits: ["c1"],
+            policy: Policy(maxAgeDays: 30),
+            now: now
+        )
+        XCTAssertFalse(result.passed)
+        XCTAssertEqual(result.violations.first?.rule, "maxAgeDays")
+    }
+
+    func testMaxAgeDaysDecodesFromJSON() throws {
+        let policy = try JSONDecoder().decode(Policy.self, from: Data("{\"maxAgeDays\": 14}".utf8))
+        XCTAssertEqual(policy.maxAgeDays, 14)
+    }
+
+    // MARK: - Canonical serialization: robustness
+
+    func testCanonicalStableAcrossConstructionFieldPermutations() throws {
+        // Two attestations built with the same content but differing only in the order/way fields
+        // are supplied must produce byte-identical canonical bytes (the form is keyed, not ordered).
+        let a = Attestation(
+            commit: "c1", reviewer: "human:leif", confidence: 0.42,
+            verdict: .review, testsPassed: true, humanApproved: true,
+            timestamp: now, note: "looks fine"
+        )
+        let b = Attestation(
+            commit: "c1", reviewer: "human:leif", confidence: 0.42,
+            verdict: .review, testsPassed: true, humanApproved: true,
+            timestamp: now, note: "looks fine"
+        )
+        XCTAssertEqual(try a.canonicalData(), try b.canonicalData())
+    }
+
+    func testCanonicalHandlesUnicodeInReviewerAndNote() throws {
+        let attestation = makeAttestation(reviewer: "human:léïf-审查", note: "approved · 🦅 — looks good")
+        let signer = Ed25519Signer.generate()
+        let signed = try signer.sign(attestation)
+        // Unicode round-trips through signing/verification unharmed.
+        XCTAssertTrue(Ed25519Verifier.isValid(signed))
+        // And through JSON-Lines storage.
+        let body = try AttestationCodec.encodeLine(signed)
+        let decoded = try AttestationCodec.decodeLines(body)
+        XCTAssertEqual(decoded.first?.reviewer, "human:léïf-审查")
+        XCTAssertEqual(decoded.first?.note, "approved · 🦅 — looks good")
+    }
+
+    func testCanonicalOmitsEmptyOptionalsConsistently() throws {
+        // A nil note and nil verdict are omitted from the canonical form (encodeIfPresent),
+        // and a record with them omitted differs from one that sets them.
+        let bare = Attestation(commit: "c1", reviewer: "agent:claude", confidence: 0.5, timestamp: now)
+        let canonical = try bare.canonicalString()
+        XCTAssertFalse(canonical.contains("note"))
+        XCTAssertFalse(canonical.contains("verdict"))
+        let withNote = makeAttestation(verdict: nil, note: "x")
+        XCTAssertNotEqual(try bare.canonicalData(), try withNote.canonicalData())
+    }
+
+    func testCanonicalSlashesAreNotEscaped() throws {
+        let attestation = makeAttestation(reviewer: "agent:org/team", note: "see https://example.com/x")
+        let canonical = try attestation.canonicalString()
+        XCTAssertTrue(canonical.contains("org/team"))
+        XCTAssertFalse(canonical.contains("\\/"))
+    }
+
+    // MARK: - Signature: robustness
+
+    func testVerifyFailsOnEmptySignature() {
+        let attestation = makeAttestation().attaching(signature: "", publicKey: "BBBB")
+        XCTAssertFalse(Ed25519Verifier.isValid(attestation))
+    }
+
+    func testVerifyFailsOnGarbageSignatureBytes() throws {
+        let signer = Ed25519Signer.generate()
+        let signed = try signer.sign(makeAttestation())
+        // Keep the real public key, swap in a malformed (but base64) signature.
+        let broken = signed.attaching(signature: "AAAA", publicKey: signed.publicKey ?? "")
+        XCTAssertFalse(Ed25519Verifier.isValid(broken))
+    }
+
+    func testVerifyFailsOnNonBase64PublicKey() throws {
+        let signer = Ed25519Signer.generate()
+        let signed = try signer.sign(makeAttestation())
+        let broken = signed.attaching(signature: signed.signature ?? "", publicKey: "!!!not base64!!!")
+        XCTAssertThrowsError(try Ed25519Verifier.verify(broken))
+    }
+
+    func testSameKeyReusedAcrossDistinctCommitsVerifiesEach() throws {
+        // One signer signing two different commits: each signature is bound to its own
+        // canonical bytes, so both verify and neither validates against the other's content.
+        let signer = Ed25519Signer.generate()
+        let first = try signer.sign(makeAttestation(commit: "c1"))
+        let second = try signer.sign(makeAttestation(commit: "c2"))
+        XCTAssertTrue(Ed25519Verifier.isValid(first))
+        XCTAssertTrue(Ed25519Verifier.isValid(second))
+        XCTAssertNotEqual(first.signature, second.signature)
+        // Cross-applying one signature to the other's content fails.
+        let crossed = second.attaching(signature: first.signature ?? "", publicKey: first.publicKey ?? "")
+        XCTAssertFalse(Ed25519Verifier.isValid(crossed))
+    }
+
+    func testInvalidBase64PrivateKeyThrowsInvalidKey() {
+        XCTAssertThrowsError(try Ed25519Signer(base64PrivateKey: "not base64!!")) { error in
+            XCTAssertEqual(error as? AttestError, .invalidKey("private key is not valid base64"))
+        }
+    }
+
+    func testWrongLengthPrivateKeyThrowsInvalidKey() {
+        // Valid base64, but the wrong number of bytes for an Ed25519 key.
+        let tooShort = Data([1, 2, 3]).base64EncodedString()
+        XCTAssertThrowsError(try Ed25519Signer(base64PrivateKey: tooShort))
+    }
+
+    // MARK: - Store: robustness
+
+    func testInMemoryStoreReturnsEmptyForUnknownCommit() throws {
+        let store = InMemoryStore()
+        XCTAssertEqual(try store.attestations(for: "never-seen").count, 0)
+        XCTAssertTrue(try store.attestedCommits().isEmpty)
+    }
+
+    func testInMemoryStoreKeepsCommitsDistinct() throws {
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1", reviewer: "agent:claude"))
+        try store.append(makeAttestation(commit: "c1", reviewer: "human:leif"))
+        try store.append(makeAttestation(commit: "c2", reviewer: "agent:claude"))
+        XCTAssertEqual(try store.attestations(for: "c1").count, 2)
+        XCTAssertEqual(try store.attestations(for: "c2").count, 1)
+        XCTAssertEqual(try store.attestedCommits().sorted(), ["c1", "c2"])
+    }
+
+    func testCodecDecodesMultipleLinesPreservingOrder() throws {
+        let a = makeAttestation(reviewer: "agent:claude", timestamp: daysAgo(2))
+        let b = makeAttestation(reviewer: "human:leif", timestamp: daysAgo(1))
+        let c = makeAttestation(reviewer: "ci:runner", timestamp: now)
+        let body = [a, b, c].map { (try? AttestationCodec.encodeLine($0)) ?? "" }.joined(separator: "\n")
+        let decoded = try AttestationCodec.decodeLines(body)
+        XCTAssertEqual(decoded.map(\.reviewer), ["agent:claude", "human:leif", "ci:runner"])
+    }
+
+    func testCodecSkipsBlankLinesBetweenRecords() throws {
+        let a = try AttestationCodec.encodeLine(makeAttestation(reviewer: "agent:claude"))
+        let b = try AttestationCodec.encodeLine(makeAttestation(reviewer: "human:leif"))
+        // Extra blank lines (e.g. from a sloppy hand-edit of a note) are tolerated.
+        let body = "\n\(a)\n\n\(b)\n\n"
+        let decoded = try AttestationCodec.decodeLines(body)
+        XCTAssertEqual(decoded.count, 2)
+    }
+
+    func testCodecMalformedLineThrowsClearError() {
+        // A single corrupt line surfaces a malformedRecord error rather than silently dropping
+        // data — corruption in an audit ledger must be loud, not lossy.
+        let good = (try? AttestationCodec.encodeLine(makeAttestation())) ?? ""
+        let body = "\(good)\n{ this is not json }"
+        XCTAssertThrowsError(try AttestationCodec.decodeLines(body)) { error in
+            guard case AttestError.malformedRecord = error else {
+                return XCTFail("expected malformedRecord, got \(error)")
+            }
+        }
+    }
+
+    func testCodecEmptyBodyDecodesToNoRecords() throws {
+        XCTAssertTrue(try AttestationCodec.decodeLines("").isEmpty)
+        XCTAssertTrue(try AttestationCodec.decodeLines("\n\n").isEmpty)
+    }
+
+    // MARK: - Exporter: robustness
+
+    func testExportEmptyRangeProducesEmptyReport() throws {
+        let report = try Exporter(store: InMemoryStore()).report(commits: [])
+        XCTAssertEqual(report.commitCount, 0)
+        XCTAssertEqual(report.recordCount, 0)
+        XCTAssertTrue(report.commits.isEmpty)
+        XCTAssertFalse(report.policyApplied)
+        XCTAssertNil(report.allPassed)
+    }
+
+    func testExportMixedSignedAndUnsignedAggregatesCounts() throws {
+        let store = InMemoryStore()
+        let signer = Ed25519Signer.generate()
+        try store.append(try signer.sign(makeAttestation(commit: "c1", reviewer: "human:leif")))
+        try store.append(makeAttestation(commit: "c1", reviewer: "agent:claude")) // unsigned
+        try store.append(makeAttestation(commit: "c2", reviewer: "agent:gpt"))     // unsigned
+        let report = try Exporter(store: store).report(commits: ["c1", "c2"])
+        XCTAssertEqual(report.recordCount, 3)
+        let signedCount = report.commits.flatMap(\.records).filter { $0.verification.signed }.count
+        XCTAssertEqual(signedCount, 1)
+    }
+
+    func testExportPolicyAggregationAllPassWhenEveryCommitPasses() throws {
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1", testsPassed: true))
+        try store.append(makeAttestation(commit: "c2", testsPassed: true))
+        let report = try Exporter(store: store).report(
+            commits: ["c1", "c2"],
+            policy: Policy(requireTestsPassed: true)
+        )
+        XCTAssertEqual(report.allPassed, true)
+        XCTAssertEqual(report.commits.compactMap(\.policyPassed), [true, true])
+    }
+
+    func testExportHonorsInjectedClockForFreshnessPolicy() throws {
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1", timestamp: daysAgo(45)))
+        // With maxAgeDays=30 and our fixture `now`, the 45-day-old record fails.
+        let report = try Exporter(store: store).report(
+            commits: ["c1"],
+            policy: Policy(maxAgeDays: 30),
+            now: now
+        )
+        XCTAssertEqual(report.allPassed, false)
+        XCTAssertEqual(report.commits.first?.policyPassed, false)
+    }
+
+    func testExportRecordsPreserveStoreOrderOldestFirst() throws {
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1", reviewer: "first", timestamp: daysAgo(3)))
+        try store.append(makeAttestation(commit: "c1", reviewer: "second", timestamp: daysAgo(2)))
+        try store.append(makeAttestation(commit: "c1", reviewer: "third", timestamp: daysAgo(1)))
+        let report = try Exporter(store: store).report(commits: ["c1"])
+        XCTAssertEqual(report.commits[0].records.map(\.attestation.reviewer), ["first", "second", "third"])
+    }
+
     func testPolicyDecodesFromJSON() throws {
         let json = """
         {
@@ -538,7 +887,8 @@ final class AttestKitTests: XCTestCase {
           "requireSignatureWhenVerdictAtLeast": "block",
           "requireTestsPassedWhenVerdictAtLeast": "review",
           "trustedKeys": ["AAAA", "BBBB"],
-          "signerPinning": { "human:leif": "AAAA" }
+          "signerPinning": { "human:leif": "AAAA" },
+          "maxAgeDays": 90
         }
         """
         let policy = try JSONDecoder().decode(Policy.self, from: Data(json.utf8))
@@ -550,6 +900,7 @@ final class AttestKitTests: XCTestCase {
         XCTAssertEqual(policy.requireTestsPassedWhenVerdictAtLeast, .review)
         XCTAssertEqual(policy.trustedKeys, ["AAAA", "BBBB"])
         XCTAssertEqual(policy.signerPinning, ["human:leif": "AAAA"])
+        XCTAssertEqual(policy.maxAgeDays, 90)
         // Unspecified fields take defaults.
         XCTAssertTrue(policy.requireAttestation)
         XCTAssertFalse(policy.requireSignature)

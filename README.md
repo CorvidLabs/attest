@@ -105,7 +105,8 @@ attestation per commit and passes any commit that has one.
   "requireSignatureWhenVerdictAtLeast": "block",
   "requireTestsPassedWhenVerdictAtLeast": "review",
   "trustedKeys": ["BASE64_PUBKEY_A", "BASE64_PUBKEY_B"],
-  "signerPinning": { "human:leif": "BASE64_LEIF_PUBKEY" }
+  "signerPinning": { "human:leif": "BASE64_LEIF_PUBKEY" },
+  "maxAgeDays": 90
 }
 ```
 
@@ -121,6 +122,7 @@ attestation per commit and passes any commit that has one.
 | `requireTestsPassedWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit reports `testsPassed`. The passing-tests record can be a *separate* attestation. Not triggered when every verdict is below the level. |
 | `trustedKeys` | any *signed* attestation on the commit fails to verify, or carries a `publicKey` that is **not** in this list of trusted base64 Ed25519 keys. Unsigned attestations are **unaffected** — `trustedKeys` constrains *which keys count as trusted*, it does **not** force signing (use `requireSignature` for that). A `nil`/empty list disables the rule. |
 | `signerPinning` | an attestation whose `reviewer` is a key in this `{reviewer: base64 pubkey}` map is **unsigned**, or **signed with a different key** (or tampered). Reviewers absent from the map are unaffected. This binds identity to a key — it is what stops a spoofed `reviewer: human:leif` that `allowedReviewers` (a string-only gate) cannot. A `nil`/empty map disables the rule. |
+| `maxAgeDays` | the commit's **newest** attestation is older than this many whole days (or the commit has no attestations at all). A single fresh record clears the commit even alongside older ones; age is measured against an injected reference time, so a stale `block` from months ago can no longer rubber-stamp today's commit. A `nil` value disables the rule. |
 
 ### Preventing reviewer spoofing
 
@@ -163,6 +165,24 @@ The two rules compose:
 
 The full pinned lifecycle (correct-key PASS, then wrong-key/unsigned FAIL) is demonstrated
 end-to-end in [`examples/07-signer-pinning.sh`](examples/07-signer-pinning.sh).
+
+### Keeping trust fresh (`maxAgeDays`)
+
+Trust decays. A `block`/`review` verdict — or any sign-off — from months ago should not silently
+keep clearing today's commit. `maxAgeDays` makes the commit's **newest** attestation prove
+recency: the commit passes only when some attestation is within `maxAgeDays` whole days of the
+verification time (a single fresh record clears it, even alongside older ones), and a commit with
+no attestations at all fails too.
+
+```json
+{ "maxAgeDays": 30 }
+```
+
+The reference "now" is **injected** into the engine (defaulted to the current epoch at the CLI),
+not read from the system clock inside the verifier, so verification is deterministic and testable.
+A fresh-PASS → stale-FAIL lifecycle is demonstrated end-to-end in
+[`examples/08-freshness.sh`](examples/08-freshness.sh). See [`docs/policy.md`](docs/policy.md) for
+the exact semantics.
 
 A default `.attest.json` ships at the repo root. It is intentionally permissive
 (it gates nothing yet) so it demonstrates the schema without breaking a repo that
@@ -325,6 +345,21 @@ attest export --range origin/main..HEAD --policy .attest.json --no-pretty > audi
 
 The full mixed (signed/unsigned, human/agent) lifecycle is demonstrated
 end-to-end in [`examples/05-audit-export.sh`](examples/05-audit-export.sh).
+
+## Documentation
+
+In-depth docs live in [`docs/`](docs/):
+
+- [`docs/architecture.md`](docs/architecture.md) — the `AttestKit` vs CLI split, canonical
+  serialization, git-notes storage, the signing model, and the verify / export flow.
+- [`docs/policy.md`](docs/policy.md) — every policy rule (all 11, including `maxAgeDays`) with JSON
+  examples, the `WhenVerdictAtLeast` semantics, and signer pinning.
+- [`docs/cli.md`](docs/cli.md) — every command and flag (`sign`, `verify`, `log`, `export`,
+  `keygen`) with examples and exit codes.
+- [`docs/signing.md`](docs/signing.md) — `keygen`, Ed25519, optional signing,
+  `trustedKeys`/`signerPinning`, and preventing reviewer spoofing.
+- [`docs/ci-integration.md`](docs/ci-integration.md) — self-hosted macOS, the `attest-verify`
+  action, the augur → attest trust pipeline, and audit export for compliance.
 
 ## Development
 

@@ -52,6 +52,14 @@ public struct Policy: Sendable, Codable, Equatable {
     /// absent from the map are unaffected. This is what stops `reviewer: human:leif` spoofing. A
     /// `nil` or empty map disables the rule.
     public var signerPinning: [String: String]?
+    /// Require a commit's attestations to be *recent*. When set, the commit must carry at least one
+    /// attestation whose `timestamp` is within `maxAgeDays` of a reference "now" (the days are
+    /// computed from epoch seconds against an injected clock, so verification is deterministic and
+    /// testable). A commit whose newest attestation is older than `maxAgeDays`, or which has no
+    /// attestations at all, fails this rule. The reference time is supplied to
+    /// `Verifier.verify(commits:now:)` (the CLI defaults it to the current epoch). `nil` disables
+    /// the rule.
+    public var maxAgeDays: Int?
 
     public init(
         requireAttestation: Bool = true,
@@ -63,7 +71,8 @@ public struct Policy: Sendable, Codable, Equatable {
         requireSignatureWhenVerdictAtLeast: Verdict? = nil,
         requireTestsPassedWhenVerdictAtLeast: Verdict? = nil,
         trustedKeys: [String]? = nil,
-        signerPinning: [String: String]? = nil
+        signerPinning: [String: String]? = nil,
+        maxAgeDays: Int? = nil
     ) {
         self.requireAttestation = requireAttestation
         self.requireHumanApprovalWhenVerdictAtLeast = requireHumanApprovalWhenVerdictAtLeast
@@ -75,6 +84,7 @@ public struct Policy: Sendable, Codable, Equatable {
         self.requireTestsPassedWhenVerdictAtLeast = requireTestsPassedWhenVerdictAtLeast
         self.trustedKeys = trustedKeys
         self.signerPinning = signerPinning
+        self.maxAgeDays = maxAgeDays
     }
 
     enum CodingKeys: String, CodingKey {
@@ -88,6 +98,7 @@ public struct Policy: Sendable, Codable, Equatable {
         case requireTestsPassedWhenVerdictAtLeast
         case trustedKeys
         case signerPinning
+        case maxAgeDays
     }
 
     public init(from decoder: any Decoder) throws {
@@ -105,6 +116,7 @@ public struct Policy: Sendable, Codable, Equatable {
             try container.decodeIfPresent(Verdict.self, forKey: .requireTestsPassedWhenVerdictAtLeast)
         self.trustedKeys = try container.decodeIfPresent([String].self, forKey: .trustedKeys)
         self.signerPinning = try container.decodeIfPresent([String: String].self, forKey: .signerPinning)
+        self.maxAgeDays = try container.decodeIfPresent(Int.self, forKey: .maxAgeDays)
     }
 
     /// The default policy: require an attestation, nothing more.
@@ -162,15 +174,26 @@ public struct Verifier: Sendable {
         self.policy = policy
     }
 
+    /// The number of seconds in one day, used to compute attestation age.
+    private static let secondsPerDay = 86_400
+
     /// Evaluates `policy` against the given commits, collecting all violations.
     ///
-    /// - Parameter commits: An ordered map of commit SHA to its attestations.
+    /// - Parameters:
+    ///   - commits: An ordered map of commit SHA to its attestations.
+    ///   - now: The reference time, in Unix epoch seconds, used by the freshness
+    ///     rule (`maxAgeDays`). It is injected rather than read from the system
+    ///     clock so verification is deterministic and testable; the CLI defaults
+    ///     it to the current epoch. Rules other than `maxAgeDays` ignore it.
     /// - Returns: A `VerificationResult` that `passed` only when there are no
     ///   violations across all commits.
-    public func verify(commits: [(commit: String, attestations: [Attestation])]) -> VerificationResult {
+    public func verify(
+        commits: [(commit: String, attestations: [Attestation])],
+        now: Int = Int(Date().timeIntervalSince1970)
+    ) -> VerificationResult {
         var violations: [Violation] = []
         for entry in commits {
-            violations.append(contentsOf: evaluate(commit: entry.commit, attestations: entry.attestations))
+            violations.append(contentsOf: evaluate(commit: entry.commit, attestations: entry.attestations, now: now))
         }
         return VerificationResult(
             passed: violations.isEmpty,
@@ -181,7 +204,7 @@ public struct Verifier: Sendable {
 
     // MARK: - Rules
 
-    private func evaluate(commit: String, attestations: [Attestation]) -> [Violation] {
+    private func evaluate(commit: String, attestations: [Attestation], now: Int) -> [Violation] {
         var violations: [Violation] = []
 
         if attestations.isEmpty {
@@ -202,6 +225,13 @@ public struct Verifier: Sendable {
             }
             if let floor = policy.minimumConfidence {
                 violations.append(Violation(commit: commit, rule: "minimumConfidence", detail: "no attestation meets confidence floor \(floor)"))
+            }
+            if let maxAge = policy.maxAgeDays {
+                violations.append(Violation(
+                    commit: commit,
+                    rule: "maxAgeDays",
+                    detail: "no attestation exists to satisfy maxAgeDays=\(maxAge)"
+                ))
             }
             return violations
         }
@@ -327,6 +357,24 @@ public struct Verifier: Sendable {
                         detail: "reviewer \(attestation.reviewer) is not signed by its pinned public key"
                     ))
                 }
+            }
+        }
+
+        if let maxAge = policy.maxAgeDays {
+            // Freshness: at least one attestation must be recent. The age of an attestation is the
+            // whole-day distance between `now` and its `timestamp` (epoch seconds), against the
+            // injected clock — never the system clock — so verification stays deterministic. We use
+            // the *newest* attestation (the smallest age), so one fresh record clears the commit
+            // even when older ones are also present. Records timestamped in the future have a
+            // non-positive age and are therefore always within the window.
+            let newestTimestamp = attestations.map(\.timestamp).max() ?? 0
+            let ageDays = (now - newestTimestamp) / Verifier.secondsPerDay
+            if ageDays > maxAge {
+                violations.append(Violation(
+                    commit: commit,
+                    rule: "maxAgeDays",
+                    detail: "newest attestation is \(ageDays) days old, exceeds maxAgeDays=\(maxAge)"
+                ))
             }
         }
 

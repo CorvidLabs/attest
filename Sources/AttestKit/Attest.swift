@@ -33,10 +33,21 @@ public struct Attest: Sendable {
     }
 
     /// Checks the given commits' attestations against a policy.
-    public func verify(commits: [String], policy: Policy) throws -> VerificationResult {
+    ///
+    /// - Parameters:
+    ///   - commits: The commit SHAs to check.
+    ///   - policy: The policy to evaluate.
+    ///   - now: The reference time (Unix epoch seconds) for the `maxAgeDays`
+    ///     freshness rule, injected so verification is deterministic. Defaults to
+    ///     the current epoch.
+    public func verify(
+        commits: [String],
+        policy: Policy,
+        now: Int = Int(Date().timeIntervalSince1970)
+    ) throws -> VerificationResult {
         let groups = try commits.map { commit in
             (commit: commit, attestations: try store.attestations(for: commit))
         }
-        return Verifier(policy: policy).verify(commits: groups)
+        return Verifier(policy: policy).verify(commits: groups, now: now)
     }
 }
