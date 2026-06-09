@@ -1087,4 +1087,153 @@ final class AttestKitTests: XCTestCase {
         XCTAssertLessThan(Verdict.review, Verdict.block)
         XCTAssertGreaterThanOrEqual(Verdict.block, Verdict.review)
     }
+
+    // MARK: - ANSI / Colorizer
+
+    private static let esc = "\u{001B}"
+
+    func testColorizerDisabledIsPassThrough() {
+        let plain = Colorizer.plain
+        XCTAssertEqual(plain.green("ok"), "ok")
+        XCTAssertEqual(plain.boldRed("FAIL"), "FAIL")
+        XCTAssertEqual(plain.apply("x", .red, .bold), "x")
+        XCTAssertFalse(plain.enabled)
+    }
+
+    func testColorizerEnabledWrapsCodes() {
+        let c = Colorizer(enabled: true)
+        XCTAssertEqual(c.green("ok"), "\(Self.esc)[32mok\(Self.esc)[0m")
+        XCTAssertEqual(c.red("no"), "\(Self.esc)[31mno\(Self.esc)[0m")
+        XCTAssertEqual(c.amber("hmm"), "\(Self.esc)[33mhmm\(Self.esc)[0m")
+        XCTAssertEqual(c.cyan("who"), "\(Self.esc)[36mwho\(Self.esc)[0m")
+        XCTAssertEqual(c.dim("aside"), "\(Self.esc)[2maside\(Self.esc)[0m")
+        XCTAssertEqual(c.bold("head"), "\(Self.esc)[1mhead\(Self.esc)[0m")
+        XCTAssertEqual(c.boldGreen("PASS"), "\(Self.esc)[1;32mPASS\(Self.esc)[0m")
+        XCTAssertEqual(c.boldRed("FAIL"), "\(Self.esc)[1;31mFAIL\(Self.esc)[0m")
+    }
+
+    func testColorizerApplyEmptyCodesIsPassThrough() {
+        XCTAssertEqual(Colorizer(enabled: true).apply("x"), "x")
+    }
+
+    // MARK: - Reporter: color-off byte-identical lock
+
+    /// Locks the plain (no-colour) rendering so colour work can never silently change
+    /// the bytes existing scripts and tests depend on.
+    func testReporterLogPlainIsByteIdentical() {
+        let groups: [(commit: String, attestations: [Attestation])] = [
+            (commit: "abc1234567def", attestations: [
+                makeAttestation(reviewer: "agent:claude", confidence: 0.9, verdict: .proceed,
+                                testsPassed: true, humanApproved: false, note: "looks good"),
+                makeAttestation(reviewer: "human:leif", confidence: 0.5, verdict: .review,
+                                testsPassed: false, humanApproved: true)
+            ])
+        ]
+        let expected = """
+        attest · ledger
+
+          commit abc1234567  (2 attestations)
+            [ok] agent:claude  verdict:proceed  conf:90%  tests:ok  human:—  unsigned
+                note: looks good
+            [!] human:leif  verdict:review  conf:50%  tests:—  human:ok  unsigned
+        """
+        XCTAssertEqual(Reporter.renderLog(groups), expected)
+        XCTAssertEqual(Reporter.renderLog(groups, colorizer: .plain), expected)
+        XCTAssertFalse(Reporter.renderLog(groups).contains(Self.esc))
+    }
+
+    func testReporterEmptyLogPlainIsByteIdentical() {
+        XCTAssertEqual(Reporter.renderLog([]), "attest · no attestations found")
+    }
+
+    func testReporterVerificationPassPlainIsByteIdentical() {
+        let result = VerificationResult(passed: true, checkedCommits: 3, violations: [])
+        XCTAssertEqual(
+            Reporter.renderVerification(result),
+            "attest verify · [ok] PASS (3 commits checked)"
+        )
+    }
+
+    func testReporterVerificationFailPlainIsByteIdentical() {
+        let result = VerificationResult(passed: false, checkedCommits: 1, violations: [
+            Violation(commit: "abc1234567def", rule: "requireTestsPassed", detail: "no attestation reports passing tests")
+        ])
+        let expected = """
+        attest verify · [x] FAIL (1 commit checked)
+
+          violations:
+            x abc1234567  requireTestsPassed: no attestation reports passing tests
+        """
+        XCTAssertEqual(Reporter.renderVerification(result), expected)
+        XCTAssertFalse(Reporter.renderVerification(result).contains(Self.esc))
+    }
+
+    // MARK: - Reporter: semantic colour codes
+
+    func testReporterVerificationColorPass() {
+        let result = VerificationResult(passed: true, checkedCommits: 2, violations: [])
+        let out = Reporter.renderVerification(result, colorizer: Colorizer(enabled: true))
+        // PASS is bold green.
+        XCTAssertTrue(out.contains("\(Self.esc)[1;32m[ok] PASS\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[1mattest verify ·\(Self.esc)[0m"))
+    }
+
+    func testReporterVerificationColorFail() {
+        let result = VerificationResult(passed: false, checkedCommits: 1, violations: [
+            Violation(commit: "deadbeef00", rule: "minimumConfidence", detail: "below floor")
+        ])
+        let out = Reporter.renderVerification(result, colorizer: Colorizer(enabled: true))
+        // FAIL is bold red, violation lines red, header amber.
+        XCTAssertTrue(out.contains("\(Self.esc)[1;31m[x] FAIL\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[33m  violations:\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[31m    x deadbeef00  minimumConfidence: below floor\(Self.esc)[0m"))
+    }
+
+    func testReporterLogColorSemantics() {
+        let groups: [(commit: String, attestations: [Attestation])] = [
+            (commit: "abc1234567def", attestations: [
+                makeAttestation(reviewer: "agent:claude", confidence: 0.95, verdict: .proceed,
+                                testsPassed: true, humanApproved: true)
+            ])
+        ]
+        let out = Reporter.renderLog(groups, colorizer: Colorizer(enabled: true))
+        // Header bold, reviewer cyan, proceed verdict + high confidence green, human:ok green.
+        XCTAssertTrue(out.contains("\(Self.esc)[1mattest · ledger\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[36magent:claude\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[32mverdict:proceed\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[32mconf:95%\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[32mtests:ok\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[32mhuman:ok\(Self.esc)[0m"))
+    }
+
+    func testReporterLogColorBlockAndReviewTints() {
+        let groups: [(commit: String, attestations: [Attestation])] = [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", confidence: 0.3, verdict: .block,
+                                testsPassed: false, humanApproved: false)
+            ]),
+            (commit: "c2", attestations: [
+                makeAttestation(reviewer: "human:leif", confidence: 0.6, verdict: .review,
+                                testsPassed: false, humanApproved: false)
+            ])
+        ]
+        let out = Reporter.renderLog(groups, colorizer: Colorizer(enabled: true))
+        // block verdict + low confidence red; review verdict + mid confidence amber.
+        XCTAssertTrue(out.contains("\(Self.esc)[31mverdict:block\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[31mconf:30%\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[33mverdict:review\(Self.esc)[0m"))
+        XCTAssertTrue(out.contains("\(Self.esc)[33mconf:60%\(Self.esc)[0m"))
+        // unsigned + tests:— + human:— are dim.
+        XCTAssertTrue(out.contains("\(Self.esc)[2munsigned\(Self.esc)[0m"))
+    }
+
+    func testReporterLogColorSignedBadge() throws {
+        let signer = try Ed25519Signer.generate()
+        let signed = try signer.sign(makeAttestation(reviewer: "agent:claude", verdict: .proceed))
+        let groups: [(commit: String, attestations: [Attestation])] = [
+            (commit: signed.commit, attestations: [signed])
+        ]
+        let out = Reporter.renderLog(groups, colorizer: Colorizer(enabled: true))
+        XCTAssertTrue(out.contains("\(Self.esc)[32msigned[ok]\(Self.esc)[0m"))
+    }
 }
