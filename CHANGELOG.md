@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Other
+
+- Add: colorful terminal output for `attest log`/`verify` — semantic, TTY/`NO_COLOR`-aware ANSI colour via a dependency-free `Colorizer`, gated by `--color auto|always|never`; piped and `--json` output stays plain.
+
 ## [v0.1.0] - 2026-06-09
 
 ### Other

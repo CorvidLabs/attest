@@ -37,7 +37,9 @@ const { title = 'terminal', ariaLabel = 'Terminal example' } = Astro.props
   .term-line { white-space: pre-wrap; word-break: break-word; }
   .term-prompt { color: var(--accent-bright); }
   .term-out { color: var(--text-muted); }
-  .term-good { color: var(--accent-bright); }
+  /* Successful command output stays SEMANTIC green (PASS / "✓"), matching the CLI's
+     terminal colours; only the brand prompt/cursor went red. */
+  .term-good { color: var(--ok-bright); }
   .term-warn { color: var(--warn); }
   .term-bad { color: var(--block); }
   .term-comment { color: var(--text-dim); font-style: italic; }

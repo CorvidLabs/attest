@@ -72,6 +72,7 @@ Exit non-zero if any commit in a range violates the policy — the gate for CI a
 | `--commit <rev>` | — | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
 | `--policy <path>` | `.attest.json` | path to the policy file (falls back to the permissive default if absent). |
 | `--json` | off | emit machine-readable JSON instead of the human report. |
+| `--color <auto\|always\|never>` | `auto` | colorize the human report. `auto` colours only when stdout is a TTY and `NO_COLOR` is unset; `--json` and piped output stay plain. |
 
 ```sh
 attest verify --range origin/main..HEAD --policy .attest.json
@@ -99,6 +100,7 @@ List recorded attestations, human-readable or JSON. This is the **default** subc
 | `--range <a..b>` | — | limit to a git range. |
 | `--commit <rev>` | — | limit to a single commit. |
 | `--json` | off | emit machine-readable JSON. |
+| `--color <auto\|always\|never>` | `auto` | colorize the listing. `auto` colours only when stdout is a TTY and `NO_COLOR` is unset; `--json` and piped output stay plain. |
 
 With neither `--range` nor `--commit`, `log` lists every attested commit.
 
