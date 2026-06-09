@@ -16,7 +16,12 @@ jobs:
       contents: write
       statuses: write
     steps:
+      # fetch-depth: 0 so the PR head commit is present locally on pull_request
+      # events (checkout defaults to a shallow merge ref). attest sign validates
+      # the target commit exists, so the head SHA it attests must be fetched.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: swift build
       - run: swift test
       - run: fledge spec check
