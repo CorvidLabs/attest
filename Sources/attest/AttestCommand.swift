@@ -16,7 +16,7 @@ struct AttestCommand: AsyncParsableCommand {
         valid record, so attest works with zero setup. A policy in `.attest.json` lets CI \
         and agent loops gate on the recorded trust.
         """,
-        version: "0.1.0",
+        version: "0.2.0",
         subcommands: [Sign.self, Verify.self, Log.self, Export.self, Keygen.self],
         defaultSubcommand: Log.self
     )
