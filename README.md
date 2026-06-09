@@ -73,6 +73,9 @@ attest log --range main..HEAD
 
 # Gate in CI / an agent loop (exits non-zero on any violation):
 attest verify --range origin/main..HEAD --policy .attest.json
+
+# Export the whole range as one stable JSON audit document (for archival):
+attest export --range origin/main..HEAD --policy .attest.json
 ```
 
 ### `--from-augur`
@@ -201,6 +204,75 @@ attest verify --commit HEAD || echo "trust policy not satisfied — escalating t
 ```json
 { "checkedCommits": 1, "passed": false, "violations": [ { "commit": "…", "detail": "…", "rule": "requireTestsPassed" } ] }
 ```
+
+## Audit & compliance
+
+`attest log` is a *human/diagnostic* listing. `attest export` is its archival
+counterpart: a single, **stable JSON document** covering the *complete*
+provenance trail across a commit range — every commit, every attestation, each
+record's cryptographic **verification status**, and (with `--policy`) a
+per-commit pass/fail. Output is deterministic (sorted keys; commits oldest-first,
+the order `git rev-list --reverse` returns), so it diffs cleanly and is suitable
+for compliance archival.
+
+```sh
+attest export --range origin/main..HEAD                      # whole range
+attest export --commit HEAD                                  # one commit
+attest export --range main..HEAD --policy .attest.json       # with per-commit verdicts
+attest export --range main..HEAD --no-pretty > audit.json    # compact, for storage
+```
+
+It is always JSON (no `--json` flag); pass `--no-pretty` for compact output.
+Each record's `verification` says whether it is `signed` and, for signed
+records, whether the embedded signature `verified` against its embedded public
+key (a tampered or wrong-key record reports `verified: false`); unsigned records
+omit `verified`.
+
+```json
+{
+  "allPassed": true,
+  "commitCount": 1,
+  "commits": [
+    {
+      "commit": "9f2c1a7b04...",
+      "policyPassed": true,
+      "records": [
+        {
+          "attestation": {
+            "commit": "9f2c1a7b04...",
+            "confidence": 0.92,
+            "humanApproved": false,
+            "publicKey": "base64...",
+            "reviewer": "agent:claude",
+            "signature": "base64...",
+            "testsPassed": true,
+            "timestamp": 1700000000,
+            "verdict": "proceed"
+          },
+          "verification": { "signed": true, "verified": true }
+        }
+      ]
+    }
+  ],
+  "policyApplied": true,
+  "recordCount": 1,
+  "version": 1
+}
+```
+
+**How it complements `log`/`verify`.** `log` is for a human reading the ledger;
+`verify` is an exit-code gate for CI / agent loops; `export` is the durable
+record an auditor keeps — it folds in `verify`'s policy verdict *and* the
+per-record signature checks `log` only badges, across the full range, in one
+machine-stable file. A natural CI / pre-commit archival step:
+
+```sh
+# archive the trust trail for this PR alongside the build artifacts
+attest export --range origin/main..HEAD --policy .attest.json --no-pretty > audit.json
+```
+
+The full mixed (signed/unsigned, human/agent) lifecycle is demonstrated
+end-to-end in [`examples/05-audit-export.sh`](examples/05-audit-export.sh).
 
 ## Development
 

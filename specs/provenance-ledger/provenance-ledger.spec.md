@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 1
+version: 2
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -13,6 +13,7 @@ files:
   - Sources/AttestKit/KeyStore.swift
   - Sources/AttestKit/Attest.swift
   - Sources/AttestKit/Reporter.swift
+  - Sources/AttestKit/Exporter.swift
 db_tables: []
 depends_on: []
 ---
@@ -97,6 +98,16 @@ Two design commitments make it usable everywhere:
 | `AugurVerdict.parse(_:)` | Parse `augur check --json`, mapping `riskScore` to `confidence = 1 - riskScore/100`. |
 | `Reporter.renderLog(_:)` / `renderVerification(_:)` | Human-readable terminal rendering. |
 
+### Audit Export
+
+| Export | Description |
+|--------|-------------|
+| `Exporter.init(store:)` | Construct the aggregator over an `AttestationStore`. |
+| `Exporter.report(commits:policy:)` | Build an `AuditReport` over the given commits; with a `Policy`, include per-commit pass/fail. |
+| `AuditReport.formatVersion` | The stable integer format version of the report document. |
+| `AuditReport.jsonString(pretty:)` / `jsonData(pretty:)` | Stable, sorted-key JSON of the report (pretty by default). |
+| `VerificationStatus.evaluate(_:)` | Compute a record's `signed` flag and (for signed records) whether it verifies. |
+
 ### Types & Enums
 
 | Type | Description |
@@ -108,6 +119,11 @@ Two design commitments make it usable everywhere:
 | `VerificationResult` | `passed`, `checkedCommits`, `violations`; emits stable JSON. |
 | `AugurVerdict` | The `verdict` + derived `confidence` parsed from augur JSON. |
 | `AttestError` | The error space: repository, git, parsing, key, and verification failures. |
+| `AuditReport` | The complete provenance trail across a range as one stable, `Codable` document. |
+| `AuditCommit` | One commit's `records` plus an optional `policyPassed`. |
+| `AuditRecord` | An `Attestation` paired with its computed `VerificationStatus`. |
+| `VerificationStatus` | A record's `signed` flag and (for signed records) `verified` result. |
+| `Exporter` | Aggregates a range's attestations into an `AuditReport`. |
 
 ## Invariants
 
@@ -125,6 +141,20 @@ Two design commitments make it usable everywhere:
   clamped to `0...1`.
 - `KeyStore.generate` writes the private key with `0600` permissions.
 - `Attest.verify` passes only when there are zero violations across all checked commits.
+- `Exporter.report` is deterministic: commits appear in the order supplied (the caller
+  resolves the range with `NotesStore.commits(inRange:)`, oldest first, exactly as
+  `verify`/`log` do — the exporter does no git walking of its own), records appear in store
+  order (oldest first), and `AuditReport.jsonString` uses sorted keys, so identical inputs
+  yield byte-identical JSON.
+- A commit with no attestations is still represented in an `AuditReport` (empty `records`),
+  so an audit covers the full surface of the range, not only attested commits.
+- `VerificationStatus.evaluate` reuses `Ed25519Verifier`: an unsigned record is
+  `{ signed: false }` with `verified` omitted; a signed record reports
+  `verified: true` only when its embedded signature validates over its canonical bytes
+  against its embedded public key, and `false` for any tampered content or key mismatch.
+- `Exporter.report` includes a per-commit `policyPassed` and a top-level `allPassed` only
+  when a `Policy` is supplied; both are omitted otherwise, and the policy evaluation reuses
+  the same `Verifier` as `attest verify`.
 
 ## Behavioral Examples
 
@@ -138,6 +168,14 @@ Two design commitments make it usable everywhere:
   exits non-zero for any commit lacking a passing-tests attestation, zero otherwise.
 - `requireHumanApprovalWhenVerdictAtLeast: "review"` fails a `block`-verdict commit unless
   some attestation is `humanApproved`; a `proceed`-verdict commit is unaffected.
+- `attest export --range A..B` emits one JSON `AuditReport` covering every commit in the
+  range (oldest first), each attestation enriched with a `verification` status, suitable for
+  compliance archival — distinct from `attest log`, which is a human/diagnostic listing.
+- A signed attestation whose signature verifies exports `"verification": { "signed": true,
+  "verified": true }`; a tampered or wrong-key signed record exports `"verified": false`; an
+  unsigned record exports `"verification": { "signed": false }` (no `verified`).
+- `attest export --range A..B --policy .attest.json` adds a per-commit `policyPassed` and a
+  top-level `allPassed`, computed with the same `Verifier` as `attest verify`.
 
 ## Error Cases
 
@@ -164,3 +202,9 @@ Two design commitments make it usable everywhere:
   serialization, optional Ed25519 signing/verification, git-notes `AttestationStore` with an
   in-memory fake, JSON `Policy` + `Verifier`, augur JSON ingestion, JSON/human reporters, and
   the `sign`/`verify`/`log`/`keygen` CLI.
+- v2: Range-wide audit export — `Exporter` aggregates a range's attestations into a stable,
+  `Codable` `AuditReport` (`AuditCommit` / `AuditRecord` / `VerificationStatus`), computing a
+  per-record verification status with the existing `Ed25519Verifier` and an optional
+  per-commit policy verdict via the existing `Verifier`. Adds the `attest export` CLI
+  subcommand. Purely additive: no change to canonical serialization, signatures, storage, or
+  any existing API.

@@ -13,6 +13,15 @@
 - [x] CLI: `sign` (with `--from-augur`), `verify`, `log`, `keygen`.
 - [x] Unit tests over the engine with an in-memory store.
 
+## Done (v2)
+
+- [x] `Exporter` aggregating a range's attestations into a stable, `Codable` `AuditReport`.
+- [x] `AuditCommit` / `AuditRecord` / `VerificationStatus` with per-record verification reuse of `Ed25519Verifier`.
+- [x] Optional per-commit policy pass/fail in the report via the existing `Verifier`.
+- [x] `attest export` CLI subcommand (`--range` / `--commit` / `--policy` / `--[no-]pretty`).
+- [x] Engine tests: completeness, determinism, signed/tampered/wrong-key status, policy verdicts, JSON round-trip.
+- [x] `examples/05-audit-export.sh` and README "Audit & compliance" section.
+
 ## Next
 
 - [ ] `attest push` / `attest fetch` wrappers for `refs/notes/attest` syncing.
