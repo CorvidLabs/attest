@@ -100,7 +100,10 @@ attestation per commit and passes any commit that has one.
   "requireTestsPassed": true,
   "requireHumanApprovalWhenVerdictAtLeast": "review",
   "requireSignature": false,
-  "minimumConfidence": 0.6
+  "minimumConfidence": 0.6,
+  "allowedReviewers": ["human:", "agent:claude"],
+  "requireSignatureWhenVerdictAtLeast": "block",
+  "requireTestsPassedWhenVerdictAtLeast": "review"
 }
 ```
 
@@ -111,6 +114,9 @@ attestation per commit and passes any commit that has one.
 | `requireHumanApprovalWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is `humanApproved`. The human sign-off can be a *separate* attestation (e.g. `attest sign --reviewer human:leif --human-approved`) — it need not restate the verdict. |
 | `requireSignature` | no *valid signed* attestation exists. |
 | `minimumConfidence` | the highest recorded confidence is below the floor. |
+| `allowedReviewers` | any attestation on the commit has a `reviewer` outside the allow-list. Matching per pattern: an **exact** match against the full reviewer string, *or* — when the pattern ends with `:` (e.g. `"human:"`) — a **prefix** match, so `"human:"` allows any `human:*` reviewer while `"agent:claude"` matches only exactly. A `nil`/empty list disables the rule. |
+| `requireSignatureWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit is *validly signed*. The signature can be a *separate* attestation. Not triggered when every verdict is below the level. |
+| `requireTestsPassedWhenVerdictAtLeast` | some attestation's verdict is at/above the level but no attestation on the commit reports `testsPassed`. The passing-tests record can be a *separate* attestation. Not triggered when every verdict is below the level. |
 
 A default `.attest.json` ships at the repo root. It is intentionally permissive
 (it gates nothing yet) so it demonstrates the schema without breaking a repo that

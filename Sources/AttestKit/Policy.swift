@@ -22,19 +22,41 @@ public struct Policy: Sendable, Codable, Equatable {
     public var requireSignature: Bool
     /// Require the strongest attestation's `confidence` to meet this floor (0...1).
     public var minimumConfidence: Double?
+    /// Restrict the reviewers permitted to attest on a commit. When non-`nil`, every
+    /// attestation on the commit must have a `reviewer` that matches one of the listed
+    /// patterns. Matching is, per pattern: an **exact** match against the full reviewer
+    /// string, *or* — when the pattern ends with `:` (e.g. `"human:"`) — a **prefix**
+    /// match on the role segment, so `"human:"` allows any `human:*` reviewer. A `nil` or
+    /// empty list disables the rule.
+    public var allowedReviewers: [String]?
+    /// Require at least one *valid signed* attestation on a commit when any of its
+    /// attestations carries a verdict at or above this level. The signature can live on a
+    /// *separate* attestation (it need not be the one carrying the high verdict). `nil`
+    /// disables the rule.
+    public var requireSignatureWhenVerdictAtLeast: Verdict?
+    /// Require at least one attestation with `testsPassed == true` on a commit when any of
+    /// its attestations carries a verdict at or above this level. The passing-tests record
+    /// can be a *separate* attestation. `nil` disables the rule.
+    public var requireTestsPassedWhenVerdictAtLeast: Verdict?
 
     public init(
         requireAttestation: Bool = true,
         requireHumanApprovalWhenVerdictAtLeast: Verdict? = nil,
         requireTestsPassed: Bool = false,
         requireSignature: Bool = false,
-        minimumConfidence: Double? = nil
+        minimumConfidence: Double? = nil,
+        allowedReviewers: [String]? = nil,
+        requireSignatureWhenVerdictAtLeast: Verdict? = nil,
+        requireTestsPassedWhenVerdictAtLeast: Verdict? = nil
     ) {
         self.requireAttestation = requireAttestation
         self.requireHumanApprovalWhenVerdictAtLeast = requireHumanApprovalWhenVerdictAtLeast
         self.requireTestsPassed = requireTestsPassed
         self.requireSignature = requireSignature
         self.minimumConfidence = minimumConfidence
+        self.allowedReviewers = allowedReviewers
+        self.requireSignatureWhenVerdictAtLeast = requireSignatureWhenVerdictAtLeast
+        self.requireTestsPassedWhenVerdictAtLeast = requireTestsPassedWhenVerdictAtLeast
     }
 
     enum CodingKeys: String, CodingKey {
@@ -43,6 +65,9 @@ public struct Policy: Sendable, Codable, Equatable {
         case requireTestsPassed
         case requireSignature
         case minimumConfidence
+        case allowedReviewers
+        case requireSignatureWhenVerdictAtLeast
+        case requireTestsPassedWhenVerdictAtLeast
     }
 
     public init(from decoder: any Decoder) throws {
@@ -53,6 +78,11 @@ public struct Policy: Sendable, Codable, Equatable {
         self.requireTestsPassed = try container.decodeIfPresent(Bool.self, forKey: .requireTestsPassed) ?? false
         self.requireSignature = try container.decodeIfPresent(Bool.self, forKey: .requireSignature) ?? false
         self.minimumConfidence = try container.decodeIfPresent(Double.self, forKey: .minimumConfidence)
+        self.allowedReviewers = try container.decodeIfPresent([String].self, forKey: .allowedReviewers)
+        self.requireSignatureWhenVerdictAtLeast =
+            try container.decodeIfPresent(Verdict.self, forKey: .requireSignatureWhenVerdictAtLeast)
+        self.requireTestsPassedWhenVerdictAtLeast =
+            try container.decodeIfPresent(Verdict.self, forKey: .requireTestsPassedWhenVerdictAtLeast)
     }
 
     /// The default policy: require an attestation, nothing more.
@@ -190,6 +220,63 @@ public struct Verifier: Sendable {
             }
         }
 
+        if let allowed = policy.allowedReviewers, !allowed.isEmpty {
+            for attestation in attestations where !Verifier.reviewerIsAllowed(attestation.reviewer, patterns: allowed) {
+                violations.append(Violation(
+                    commit: commit,
+                    rule: "allowedReviewers",
+                    detail: "reviewer \(attestation.reviewer) is not in the allow-list \(allowed)"
+                ))
+            }
+        }
+
+        if let threshold = policy.requireSignatureWhenVerdictAtLeast {
+            // Mirrors `requireHumanApprovalWhenVerdictAtLeast`: triggers when any attestation
+            // on the commit carries a verdict at or above the threshold, and is satisfied by
+            // any *valid signed* attestation anywhere on the commit (not necessarily the one
+            // carrying the high verdict). Reuses the existing `Ed25519Verifier`.
+            let triggered = attestations.contains { ($0.verdict ?? .proceed) >= threshold }
+            let signed = attestations.contains { Ed25519Verifier.isValid($0) }
+            if triggered, !signed {
+                violations.append(Violation(
+                    commit: commit,
+                    rule: "requireSignatureWhenVerdictAtLeast",
+                    detail: "verdict is at least \(threshold.rawValue) on this commit but no attestation is validly signed"
+                ))
+            }
+        }
+
+        if let threshold = policy.requireTestsPassedWhenVerdictAtLeast {
+            // Conditional form of `requireTestsPassed`: triggers when any attestation on the
+            // commit carries a verdict at or above the threshold, and is satisfied by any
+            // attestation with `testsPassed == true` anywhere on the commit.
+            let triggered = attestations.contains { ($0.verdict ?? .proceed) >= threshold }
+            let testsPassed = attestations.contains { $0.testsPassed }
+            if triggered, !testsPassed {
+                violations.append(Violation(
+                    commit: commit,
+                    rule: "requireTestsPassedWhenVerdictAtLeast",
+                    detail: "verdict is at least \(threshold.rawValue) on this commit but no attestation reports passing tests"
+                ))
+            }
+        }
+
         return violations
+    }
+
+    /// Whether `reviewer` matches any of the allow-list `patterns`.
+    ///
+    /// A pattern matches when it equals `reviewer` exactly, or — when the pattern ends with
+    /// `:` (a role prefix such as `"human:"`) — when `reviewer` begins with that prefix.
+    private static func reviewerIsAllowed(_ reviewer: String, patterns: [String]) -> Bool {
+        for pattern in patterns {
+            if reviewer == pattern {
+                return true
+            }
+            if pattern.hasSuffix(":"), reviewer.hasPrefix(pattern) {
+                return true
+            }
+        }
+        return false
     }
 }

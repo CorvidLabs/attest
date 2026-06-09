@@ -253,14 +253,143 @@ final class AttestKitTests: XCTestCase {
         XCTAssertTrue(high.passed)
     }
 
+    // MARK: - Policy: allowedReviewers
+
+    func testAllowedReviewersAllowsPrefixAndExactMatches() {
+        // "human:" is a role prefix (allows any human:*); "agent:claude" is an exact match.
+        let policy = Policy(allowedReviewers: ["human:", "agent:claude"])
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "human:leif"),
+                makeAttestation(reviewer: "agent:claude")
+            ])
+        ])
+        XCTAssertTrue(result.passed)
+        XCTAssertTrue(result.violations.isEmpty)
+    }
+
+    func testAllowedReviewersRejectsOffListReviewer() {
+        // "agent:claude" is exact-only, so "agent:gpt" is rejected; "human:" allows human:leif.
+        let policy = Policy(allowedReviewers: ["human:", "agent:claude"])
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "human:leif"),
+                makeAttestation(reviewer: "agent:gpt")
+            ])
+        ])
+        XCTAssertFalse(result.passed)
+        XCTAssertEqual(result.violations.count, 1)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "allowedReviewers")
+        XCTAssertEqual(
+            violation?.detail,
+            "reviewer agent:gpt is not in the allow-list [\"human:\", \"agent:claude\"]"
+        )
+    }
+
+    func testAllowedReviewersEmptyListDisablesRule() {
+        // An empty list (or nil) disables the rule entirely.
+        let policy = Policy(allowedReviewers: [])
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(reviewer: "anyone:at:all")])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    // MARK: - Policy: requireSignatureWhenVerdictAtLeast
+
+    func testRequireSignatureWhenVerdictAtLeastPassesWithSignedAttestation() throws {
+        let policy = Policy(requireSignatureWhenVerdictAtLeast: .review)
+        let signer = Ed25519Signer.generate()
+        // The high verdict is on an unsigned agent record; a separate signed record satisfies it.
+        let signed = try signer.sign(makeAttestation(reviewer: "human:leif", verdict: nil))
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", verdict: .block),
+                signed
+            ])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    func testRequireSignatureWhenVerdictAtLeastFailsWithoutSignature() {
+        let policy = Policy(requireSignatureWhenVerdictAtLeast: .review)
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(verdict: .block)])
+        ])
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "requireSignatureWhenVerdictAtLeast")
+        XCTAssertEqual(
+            violation?.detail,
+            "verdict is at least review on this commit but no attestation is validly signed"
+        )
+    }
+
+    func testRequireSignatureWhenVerdictAtLeastNotTriggeredBelowThreshold() {
+        let policy = Policy(requireSignatureWhenVerdictAtLeast: .block)
+        // Highest verdict is review, below the block threshold: rule does not trigger.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(verdict: .review)])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    // MARK: - Policy: requireTestsPassedWhenVerdictAtLeast
+
+    func testRequireTestsPassedWhenVerdictAtLeastPassesWithPassingTests() {
+        let policy = Policy(requireTestsPassedWhenVerdictAtLeast: .review)
+        // High verdict on a record without tests; a separate record reports passing tests.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [
+                makeAttestation(reviewer: "agent:claude", verdict: .block, testsPassed: false),
+                makeAttestation(reviewer: "ci:runner", verdict: nil, testsPassed: true)
+            ])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
+    func testRequireTestsPassedWhenVerdictAtLeastFailsWithoutPassingTests() {
+        let policy = Policy(requireTestsPassedWhenVerdictAtLeast: .review)
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(verdict: .block, testsPassed: false)])
+        ])
+        XCTAssertFalse(result.passed)
+        let violation = result.violations.first
+        XCTAssertEqual(violation?.rule, "requireTestsPassedWhenVerdictAtLeast")
+        XCTAssertEqual(
+            violation?.detail,
+            "verdict is at least review on this commit but no attestation reports passing tests"
+        )
+    }
+
+    func testRequireTestsPassedWhenVerdictAtLeastNotTriggeredBelowThreshold() {
+        let policy = Policy(requireTestsPassedWhenVerdictAtLeast: .block)
+        // Highest verdict is review, below block: rule does not trigger even with failing tests.
+        let result = Verifier(policy: policy).verify(commits: [
+            (commit: "c1", attestations: [makeAttestation(verdict: .review, testsPassed: false)])
+        ])
+        XCTAssertTrue(result.passed)
+    }
+
     func testPolicyDecodesFromJSON() throws {
         let json = """
-        { "requireTestsPassed": true, "requireHumanApprovalWhenVerdictAtLeast": "review", "minimumConfidence": 0.7 }
+        {
+          "requireTestsPassed": true,
+          "requireHumanApprovalWhenVerdictAtLeast": "review",
+          "minimumConfidence": 0.7,
+          "allowedReviewers": ["human:", "agent:claude"],
+          "requireSignatureWhenVerdictAtLeast": "block",
+          "requireTestsPassedWhenVerdictAtLeast": "review"
+        }
         """
         let policy = try JSONDecoder().decode(Policy.self, from: Data(json.utf8))
         XCTAssertTrue(policy.requireTestsPassed)
         XCTAssertEqual(policy.requireHumanApprovalWhenVerdictAtLeast, .review)
         XCTAssertEqual(policy.minimumConfidence, 0.7)
+        XCTAssertEqual(policy.allowedReviewers, ["human:", "agent:claude"])
+        XCTAssertEqual(policy.requireSignatureWhenVerdictAtLeast, .block)
+        XCTAssertEqual(policy.requireTestsPassedWhenVerdictAtLeast, .review)
         // Unspecified fields take defaults.
         XCTAssertTrue(policy.requireAttestation)
         XCTAssertFalse(policy.requireSignature)

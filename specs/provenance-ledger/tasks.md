@@ -22,10 +22,18 @@
 - [x] Engine tests: completeness, determinism, signed/tampered/wrong-key status, policy verdicts, JSON round-trip.
 - [x] `examples/05-audit-export.sh` and README "Audit & compliance" section.
 
+## Done (v4)
+
+- [x] `allowedReviewers` policy rule — per-commit reviewer allow-list with exact + role-prefix (`"human:"`) matching.
+- [x] `requireSignatureWhenVerdictAtLeast` — conditional `requireSignature` keyed to a verdict threshold; reuses `Ed25519Verifier`.
+- [x] `requireTestsPassedWhenVerdictAtLeast` — conditional `requireTestsPassed` keyed to a verdict threshold.
+- [x] Engine tests: pass/fail per rule, not-triggered-below-threshold for the conditional rules, prefix-vs-exact for the allow-list, JSON decoding.
+- [x] `examples/06-policy-rules.sh` and README policy-table rows + spec v4 (Public API / Invariants / Behavioral Examples / Change Log).
+
 ## Next
 
 - [ ] `attest push` / `attest fetch` wrappers for `refs/notes/attest` syncing.
-- [ ] Multiple trusted public keys / a signer allow-list in the policy.
+- [ ] Multiple trusted public keys in the policy (beyond `allowedReviewers`, which gates the reviewer string, not the key).
 - [ ] `attest verify --require-key <pub>` to pin an expected signer.
 - [ ] Linux/Windows CI matrix (core is macOS-targeted today).
 - [ ] Optional revocation / supersede semantics for attestations.
