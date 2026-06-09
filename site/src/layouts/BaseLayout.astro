@@ -1,0 +1,38 @@
+---
+import '../styles/globals.css'
+import Header from '../components/Header.astro'
+import Footer from '../components/Footer.astro'
+import { base } from '../lib/path'
+interface Props {
+  title: string
+  description?: string
+}
+const { title, description = "🔏 Signed provenance for code changes — a verifiable, policy-gated ledger of who reviewed what, and at what confidence, keyed to commit SHAs." } = Astro.props
+// Canonical: prefer the site origin + the current pathname so crawlers don't
+// treat trailing-slash/no-slash or query-string variants as duplicates.
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).toString()
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+  <link rel="canonical" href={canonical} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={canonical} />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <Header />
+  <slot />
+  <Footer />
+</body>
+</html>
