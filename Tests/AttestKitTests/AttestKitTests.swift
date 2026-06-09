@@ -809,9 +809,15 @@ final class AttestKitTests: XCTestCase {
         let good = (try? AttestationCodec.encodeLine(makeAttestation())) ?? ""
         let body = "\(good)\n{ this is not json }"
         XCTAssertThrowsError(try AttestationCodec.decodeLines(body)) { error in
-            guard case AttestError.malformedRecord = error else {
+            guard case AttestError.malformedRecord(let detail) = error else {
                 return XCTFail("expected malformedRecord, got \(error)")
             }
+            // The message is clean and stable, not a dump of Swift DecodingError internals.
+            XCTAssertEqual(detail, "invalid JSON")
+            let description = (error as? AttestError)?.errorDescription ?? ""
+            XCTAssertEqual(description, "Malformed attestation record: invalid JSON")
+            XCTAssertFalse(description.contains("DecodingError"))
+            XCTAssertFalse(description.contains("CodingKeys"))
         }
     }
 

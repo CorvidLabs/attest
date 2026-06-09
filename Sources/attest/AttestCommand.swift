@@ -270,9 +270,21 @@ struct Log: AsyncParsableCommand {
             commits = try store.attestedCommits()
         }
 
-        let groups: [(commit: String, attestations: [Attestation])] = try commits.compactMap { sha in
-            let attestations = try store.attestations(for: sha)
-            return attestations.isEmpty ? nil : (commit: sha, attestations: attestations)
+        // Read each commit's note independently so one corrupt note does not hide the
+        // rest of the ledger. A malformed record is reported to stderr (loud, not lossy)
+        // and forces a non-zero exit, while every readable commit still prints normally.
+        var groups: [(commit: String, attestations: [Attestation])] = []
+        var hadUnreadable = false
+        for sha in commits {
+            do {
+                let attestations = try store.attestations(for: sha)
+                if !attestations.isEmpty {
+                    groups.append((commit: sha, attestations: attestations))
+                }
+            } catch let error as AttestError {
+                hadUnreadable = true
+                Self.warn("attest log: skipping \(sha): \(error.errorDescription ?? "unreadable record")")
+            }
         }
 
         if json {
@@ -280,6 +292,16 @@ struct Log: AsyncParsableCommand {
         } else {
             print(Reporter.renderLog(groups, colorizer: colorOptions.colorizer(json: json)))
         }
+
+        if hadUnreadable {
+            throw ExitCode(1)
+        }
+    }
+
+    /// Writes a diagnostic line to stderr so it never contaminates stdout (which may be
+    /// piped or parsed as JSON).
+    private static func warn(_ message: String) {
+        FileHandle.standardError.write(Data((message + "\n").utf8))
     }
 
     private static func renderJSON(_ groups: [(commit: String, attestations: [Attestation])]) throws -> String {

@@ -38,7 +38,9 @@ public enum AttestationCodec {
             do {
                 result.append(try decoder.decode(Attestation.self, from: data))
             } catch {
-                throw AttestError.malformedRecord(String(describing: error))
+                // Surface a clean, stable message rather than leaking raw
+                // DecodingError internals into user output.
+                throw AttestError.malformedRecord("invalid JSON")
             }
         }
         return result

@@ -13,6 +13,27 @@ A policy is evaluated against *all* of a commit's attestations as a set. The rul
 about "any attestation" or "some attestation" are satisfied (or violated) by records anywhere on
 the commit, not necessarily the same one.
 
+> ## Read this before you trust a policy
+>
+> A policy gate is only as strong as the rules that bind a record to a key. Two defaults
+> surprise people:
+>
+> - **`requireSignature: true` alone does NOT bind identity.** It proves only that *some*
+>   key signed an attestation, not *whose*. An attacker can sign with their own key while
+>   claiming `reviewer: human:leif` and pass. To actually prevent reviewer spoofing you MUST
+>   use **`signerPinning`** (binds a named reviewer to a specific key) or **`trustedKeys` +
+>   `requireSignature` together** (forces a signature AND restricts it to keys you trust).
+>   `trustedKeys` on its own does not force signing, and `requireSignature` on its own does
+>   not check the key.
+> - **`minimumConfidence` and `requireTestsPassed` are satisfied by ANY attestation on the
+>   commit**, including one an attacker could inject. They read the best confidence and any
+>   passing-tests record across the whole commit, so on their own they prove a number exists,
+>   not that a trusted reviewer vouched for it. Combine them with **`allowedReviewers`** or
+>   **`signerPinning`** to bind the evidence to reviewers you trust.
+>
+> Rule of thumb: confidence, tests, and verdict gates establish *what was claimed*; only
+> `signerPinning` and `trustedKeys` + `requireSignature` establish *who claimed it*.
+
 ## All 11 rules
 
 | Rule | Type | Default | Fails a commit when… |
