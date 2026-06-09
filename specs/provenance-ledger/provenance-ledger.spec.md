@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 6
+version: 7
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -13,6 +13,7 @@ files:
   - Sources/AttestKit/KeyStore.swift
   - Sources/AttestKit/Attest.swift
   - Sources/AttestKit/Reporter.swift
+  - Sources/AttestKit/ANSI.swift
   - Sources/AttestKit/Exporter.swift
 db_tables: []
 depends_on: []
@@ -102,7 +103,7 @@ Two design commitments make it usable everywhere:
 | `Policy.load(fromFile:)` | Load a policy from a `.attest.json` file. |
 | `Verifier.init(policy:)` / `verify(commits:now:)` | Evaluate a policy over commits' attestations; `now` (Unix epoch seconds, defaulting to the current epoch) is the injected clock for the `maxAgeDays` freshness rule. |
 | `AugurVerdict.parse(_:)` | Parse `augur check --json`, mapping `riskScore` to `confidence = 1 - riskScore/100`. |
-| `Reporter.renderLog(_:)` / `renderVerification(_:)` | Human-readable terminal rendering. |
+| `Reporter.renderLog(_:colorizer:)` / `renderVerification(_:colorizer:)` | Human-readable terminal rendering. `colorizer` defaults to `.plain` (byte-identical, unstyled output); pass an enabled `Colorizer` for semantic ANSI colour. |
 
 ### Audit Export
 
@@ -130,6 +131,8 @@ Two design commitments make it usable everywhere:
 | `AuditRecord` | An `Attestation` paired with its computed `VerificationStatus`. |
 | `VerificationStatus` | A record's `signed` flag and (for signed records) `verified` result. |
 | `Exporter` | Aggregates a range's attestations into an `AuditReport`. |
+| `ANSIColor` | The SGR codes (`red`/`amber`/`green`/`cyan`/`dim`/`bold`/`reset`) used for terminal styling. |
+| `Colorizer` | Wraps strings in ANSI codes when `enabled`; `.plain` is a pass-through gate for non-TTY/`--json` output. |
 
 ## Invariants
 
@@ -326,3 +329,14 @@ Two design commitments make it usable everywhere:
   rather than read from the system clock inside the evaluation logic, keeping verification
   deterministic and testable. Adding the `now` parameter is source-compatible (defaulted); all other
   rules ignore it.
+- v7: Optional semantic ANSI colour for the human-readable reporters (purely additive — no change to
+  canonical serialization, signatures, storage, JSON output, or any policy rule). Adds a
+  dependency-free `Colorizer` (gated by an `enabled: Bool`) and `ANSIColor` SGR codes in `ANSI.swift`,
+  built only from Foundation strings (no new dependency). `Reporter.renderLog`/`renderVerification`
+  gain a `colorizer:` parameter defaulting to `.plain`, so all existing call sites and tests stay
+  byte-identical. Colour is **semantic**, not a brand hue: verify PASS is bold green / FAIL bold red,
+  violations red with an amber header; in the ledger, `proceed`/`review`/`block` and confidence tint
+  green/amber/red, reviewers are cyan, valid signatures and `human:ok`/`tests:ok` green, and
+  unsigned/secondary text is dim. The CLI's `log`/`verify` subcommands add a `--color auto|always|never`
+  option (default `auto`): `auto` enables colour only when stdout is a TTY and `NO_COLOR` is unset
+  (https://no-color.org); `--json` and piped/non-TTY output stay plain. `export` is unchanged (always JSON).

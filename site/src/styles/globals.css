@@ -1,18 +1,22 @@
 :root {
-  --bg: #0a0f0d;
-  --bg-raised: #0e1714;
-  --bg-raised-2: #131c19;
-  --border: #1c2b26;
-  --border-strong: #2a3d36;
-  --text: #f1f5f3;
-  --text-muted: #b8c8c1;
-  --text-dim: #8ba39a;
-  --accent: #10b981;
-  --accent-bright: #6ee7b7;
-  --accent-deep: #065f46;
-  --accent-muted: rgba(16, 185, 129, 0.10);
-  --accent-glow: rgba(16, 185, 129, 0.18);
-  --focus: #6ee7b7;
+  /* Brand palette — a refined crimson/rose. The near-black background carries a faint
+     warm-red tint (rather than the previous green) so the whole surface reads on-brand. */
+  --bg: #100a0c;
+  --bg-raised: #170e11;
+  --bg-raised-2: #1d1216;
+  --border: #2b1c20;
+  --border-strong: #3d2a2f;
+  --text: #f5f1f2;
+  --text-muted: #ccbcc0;
+  --text-dim: #a3939a;
+  /* Accent: a polished rose-red (#e11d48 family) — softer and more premium than a harsh
+     fire-engine red, while still reading as confident/trustworthy. Contrast checked AA. */
+  --accent: #e11d48;
+  --accent-bright: #fb7185;
+  --accent-deep: #881337;
+  --accent-muted: rgba(225, 29, 72, 0.10);
+  --accent-glow: rgba(225, 29, 72, 0.18);
+  --focus: #fb7185;
   --radius: 10px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --serif: "Iowan Old Style", "Apple Garamond", "Baskerville", Georgia, serif;
@@ -23,6 +27,12 @@
   /* semantic "block" — a hard policy violation */
   --block: #f87171;
   --block-muted: rgba(248, 113, 113, 0.10);
+  /* semantic "ok" — verified / PASS / signed success cues. Stays GREEN even on the
+     red-branded site: it mirrors the CLI's semantic terminal colour, where green means
+     "verified". Brand/accent went red; success indicators deliberately did not. */
+  --ok: #34d399;
+  --ok-bright: #6ee7b7;
+  --ok-muted: rgba(52, 211, 153, 0.12);
   --tap: 44px;
   --max-w: 1180px;
   --container-pad: 32px;
@@ -70,7 +80,7 @@ select:focus-visible, [tabindex]:focus-visible {
 
 .skip-link {
   position: absolute; top: -100px; left: 8px;
-  background: var(--accent); color: #06140e;
+  background: var(--accent); color: #ffffff;
   padding: 12px 18px; border-radius: 8px;
   font-weight: 600; text-decoration: none; z-index: 100;
   transition: top .15s;

@@ -35,6 +35,47 @@ struct RepoOptions: ParsableArguments {
     }
 }
 
+// MARK: - Color
+
+/// When to colorize human-readable output.
+enum ColorMode: String, ExpressibleByArgument, CaseIterable {
+    /// Colorize only when stdout is a TTY and `NO_COLOR` is unset.
+    case auto
+    /// Always colorize, even when piped.
+    case always
+    /// Never colorize.
+    case never
+}
+
+struct ColorOptions: ParsableArguments {
+    @Option(
+        name: .long,
+        help: "Colorize human output: auto (TTY only), always, or never."
+    )
+    var color: ColorMode = .auto
+
+    /// Resolves whether colour should be applied for human-readable output.
+    ///
+    /// `auto` honours https://no-color.org: colour is enabled only when stdout is a
+    /// terminal *and* the `NO_COLOR` environment variable is unset. `--json` output and
+    /// piped (non-TTY) output therefore stay plain, protecting example scripts.
+    /// - Parameter json: Whether the command is emitting machine-readable JSON.
+    /// - Returns: A `Colorizer` gated on the resolved decision.
+    func colorizer(json: Bool) -> Colorizer {
+        guard !json else { return .plain }
+        switch color {
+        case .never:
+            return .plain
+        case .always:
+            return Colorizer(enabled: true)
+        case .auto:
+            let noColor = ProcessInfo.processInfo.environment["NO_COLOR"] != nil
+            let isTTY = isatty(fileno(stdout)) != 0
+            return Colorizer(enabled: isTTY && !noColor)
+        }
+    }
+}
+
 // MARK: - sign
 
 struct Sign: AsyncParsableCommand {
@@ -161,6 +202,8 @@ struct Verify: AsyncParsableCommand {
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
 
+    @OptionGroup var colorOptions: ColorOptions
+
     func run() async throws {
         let store = try repo.makeStore()
 
@@ -186,7 +229,7 @@ struct Verify: AsyncParsableCommand {
         if json {
             print(try result.jsonString())
         } else {
-            print(Reporter.renderVerification(result))
+            print(Reporter.renderVerification(result, colorizer: colorOptions.colorizer(json: json)))
         }
 
         if !result.passed {
@@ -213,6 +256,8 @@ struct Log: AsyncParsableCommand {
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
 
+    @OptionGroup var colorOptions: ColorOptions
+
     func run() async throws {
         let store = try repo.makeStore()
 
@@ -233,7 +278,7 @@ struct Log: AsyncParsableCommand {
         if json {
             print(try Self.renderJSON(groups))
         } else {
-            print(Reporter.renderLog(groups))
+            print(Reporter.renderLog(groups, colorizer: colorOptions.colorizer(json: json)))
         }
     }
 
