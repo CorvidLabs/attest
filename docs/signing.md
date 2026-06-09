@@ -42,6 +42,33 @@ pair, attaching a signature never changes the signed bytes, but any mutation of 
 (confidence, verdict, note, timestamp, reviewer, commit) makes verification fail. An unsigned
 record verifies as "not signed", never as "valid".
 
+## Commit binding: no cross-commit replay
+
+The canonical bytes include the attestation's inner `commit` field, so a signature is bound to the
+commit it names. That alone is not enough, because nothing in git stops someone with write access to
+`refs/notes/attest` (the same access as adding any note: a push, a PR, or CI) from copying a
+legitimately signed record off commit A and filing it verbatim under commit B. The signature still
+validates over A's unchanged bytes.
+
+`attest` closes this by **binding every attestation to the note key it is stored under**. The
+verifier discards any record whose inner `commit` does not equal the commit it is being evaluated
+for, *before any policy rule runs*. A relocated record is not evidence for the commit it was moved
+onto, so:
+
+- `attest verify` treats the target commit as if the transplanted record were absent. A commit whose
+  only record was relocated fails `requireAttestation`, `requireSignature`, `minimumConfidence`, and
+  every other rule that needs evidence. This defeats the replay even against a strict policy
+  combining `requireSignature`, `trustedKeys`, `signerPinning`, and `minimumConfidence`.
+- `attest log` renders a relocated record as `commit-mismatch` (not `signed[ok]`), warns on stderr,
+  and exits non-zero.
+- `attest export` marks the record `"commitMatches": false` and never reports it as
+  `"verified": true`, so an audit document cannot present a transplanted signed record as a valid
+  signed record.
+
+This holds the core promise: provenance is keyed to a commit SHA, and a signed record cannot be
+relocated or replayed onto another commit. It requires no change to the canonical serialization or
+the signature format.
+
 ## Preventing reviewer spoofing
 
 A reviewer is just a string like `agent:claude` or `human:leif`. Nothing stops someone from filing an

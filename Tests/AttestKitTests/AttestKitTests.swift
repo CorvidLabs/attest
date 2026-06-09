@@ -7,7 +7,7 @@ final class AttestKitTests: XCTestCase {
     // MARK: - Fixtures
 
     private func makeAttestation(
-        commit: String = "abc123",
+        commit: String = "c1",
         reviewer: String = "agent:claude",
         confidence: Double = 0.9,
         verdict: Verdict? = .proceed,
@@ -134,9 +134,9 @@ final class AttestKitTests: XCTestCase {
         let attest = Attest(store: store)
         try attest.record(makeAttestation(reviewer: "agent:claude"))
         try attest.record(makeAttestation(reviewer: "human:leif"))
-        let recorded = try attest.attestations(for: "abc123")
+        let recorded = try attest.attestations(for: "c1")
         XCTAssertEqual(recorded.count, 2)
-        XCTAssertEqual(try store.attestedCommits(), ["abc123"])
+        XCTAssertEqual(try store.attestedCommits(), ["c1"])
     }
 
     func testRecordWithSignerStoresSignedRecord() throws {
@@ -245,6 +245,93 @@ final class AttestKitTests: XCTestCase {
         let unsigned = makeAttestation()
         XCTAssertTrue(Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [signed])]).passed)
         XCTAssertFalse(Verifier(policy: policy).verify(commits: [(commit: "c1", attestations: [unsigned])]).passed)
+    }
+
+    // MARK: - Policy: commit binding (cross-commit replay)
+
+    func testCommitBindingAttestationOnItsOwnCommitStillPasses() throws {
+        // A signed record whose inner commit matches the note key it is filed under is
+        // genuine evidence and must keep satisfying a strict policy.
+        let policy = Policy(requireAttestation: true, requireSignature: true, minimumConfidence: 0.9)
+        let signer = Ed25519Signer.generate()
+        let signed = try signer.sign(makeAttestation(commit: "commitA", confidence: 0.95))
+        let result = Verifier(policy: policy).verify(commits: [(commit: "commitA", attestations: [signed])])
+        XCTAssertTrue(result.passed)
+        XCTAssertTrue(result.violations.isEmpty)
+    }
+
+    func testCommitBindingRejectsSignedRecordReplayedOntoAnotherCommit() throws {
+        // A legitimately signed record for commitA is copied verbatim onto commitB. Its
+        // signature still validates over its own unchanged bytes, but its inner commit names
+        // commitA, so it is not evidence for commitB. The verifier discards it before any
+        // rule runs, so requireAttestation/requireSignature/minimumConfidence all fail commitB.
+        let policy = Policy(requireAttestation: true, requireSignature: true, minimumConfidence: 0.9)
+        let signer = Ed25519Signer.generate()
+        let signedForA = try signer.sign(makeAttestation(commit: "commitA", confidence: 0.95))
+        // The transplanted record is byte-for-byte the same record, still validly signed.
+        XCTAssertTrue(Ed25519Verifier.isValid(signedForA))
+
+        let result = Verifier(policy: policy).verify(commits: [(commit: "commitB", attestations: [signedForA])])
+        XCTAssertFalse(result.passed)
+        let rules = Set(result.violations.map(\.rule))
+        XCTAssertTrue(rules.contains("requireAttestation"))
+        XCTAssertTrue(rules.contains("requireSignature"))
+        XCTAssertTrue(rules.contains("minimumConfidence"))
+        // Every violation is attributed to the commit being evaluated, not the record's commit.
+        XCTAssertTrue(result.violations.allSatisfy { $0.commit == "commitB" })
+    }
+
+    func testCommitBindingMismatchedRecordDoesNotSatisfyPinningOrTrustedKeys() throws {
+        // Even the strongest identity rules cannot be satisfied by a transplanted record:
+        // once discarded, a pinned reviewer has no record on the commit at all.
+        let signer = Ed25519Signer.generate()
+        let signedForA = try signer.sign(
+            makeAttestation(commit: "commitA", reviewer: "human:leif", confidence: 0.95, verdict: .review)
+        )
+        let policy = Policy(
+            requireSignatureWhenVerdictAtLeast: .review,
+            trustedKeys: [signer.base64PublicKey],
+            signerPinning: ["human:leif": signer.base64PublicKey]
+        )
+        // On its own commit the record passes the identity rules.
+        XCTAssertTrue(
+            Verifier(policy: policy).verify(commits: [(commit: "commitA", attestations: [signedForA])]).passed
+        )
+        // Relocated onto commitB it is discarded; the high verdict that would trigger
+        // requireSignatureWhenVerdictAtLeast is gone too, so commitB simply has no evidence.
+        let replay = Verifier(policy: policy).verify(commits: [(commit: "commitB", attestations: [signedForA])])
+        XCTAssertFalse(replay.passed)
+        XCTAssertTrue(replay.violations.contains { $0.rule == "requireAttestation" })
+    }
+
+    func testCommitBindingExporterMarksMismatchAndDoesNotReportVerified() throws {
+        // The exporter surfaces a relocated record as commitMatches=false and never verified=true,
+        // so an audit document cannot show a transplanted signed record as a valid signed record.
+        let signer = Ed25519Signer.generate()
+        let signedForA = try signer.sign(makeAttestation(commit: "commitA", confidence: 0.95))
+        // ReplayStore files the commitA-signed record under commitB, simulating a relocated note
+        // (InMemoryStore keys by the record's own inner commit and so cannot model the replay).
+        let store = ReplayStore(noteKey: "commitB", attestation: signedForA)
+        let report = try Exporter(store: store)
+            .report(commits: ["commitB"], policy: Policy(requireSignature: true))
+        let record = try XCTUnwrap(report.commits.first?.records.first)
+        XCTAssertTrue(record.verification.signed)
+        XCTAssertFalse(record.verification.commitMatches)
+        XCTAssertEqual(record.verification.verified, false)
+        XCTAssertEqual(report.commits.first?.policyPassed, false)
+        XCTAssertEqual(report.allPassed, false)
+    }
+
+    func testCommitBindingReporterRendersCommitMismatchBadge() throws {
+        // The human log marks a relocated record as commit-mismatch, not signed[ok].
+        let signer = Ed25519Signer.generate()
+        let signedForA = try signer.sign(makeAttestation(commit: "commitA", reviewer: "human:leif"))
+        let groups: [(commit: String, attestations: [Attestation])] = [
+            (commit: "commitB", attestations: [signedForA])
+        ]
+        let out = Reporter.renderLog(groups)
+        XCTAssertTrue(out.contains("commit-mismatch"))
+        XCTAssertFalse(out.contains("signed[ok]"))
     }
 
     func testMinimumConfidencePolicy() {
@@ -1128,7 +1215,7 @@ final class AttestKitTests: XCTestCase {
     /// the bytes existing scripts and tests depend on.
     func testReporterLogPlainIsByteIdentical() {
         let groups: [(commit: String, attestations: [Attestation])] = [
-            (commit: "abc1234567def", attestations: [
+            (commit: "c1", attestations: [
                 makeAttestation(reviewer: "agent:claude", confidence: 0.9, verdict: .proceed,
                                 testsPassed: true, humanApproved: false, note: "looks good"),
                 makeAttestation(reviewer: "human:leif", confidence: 0.5, verdict: .review,
@@ -1138,7 +1225,7 @@ final class AttestKitTests: XCTestCase {
         let expected = """
         attest · ledger
 
-          commit abc1234567  (2 attestations)
+          commit c1  (2 attestations)
             [ok] agent:claude  verdict:proceed  conf:90%  tests:ok  human:—  unsigned
                 note: looks good
             [!] human:leif  verdict:review  conf:50%  tests:—  human:ok  unsigned
@@ -1197,7 +1284,7 @@ final class AttestKitTests: XCTestCase {
 
     func testReporterLogColorSemantics() {
         let groups: [(commit: String, attestations: [Attestation])] = [
-            (commit: "abc1234567def", attestations: [
+            (commit: "c1", attestations: [
                 makeAttestation(reviewer: "agent:claude", confidence: 0.95, verdict: .proceed,
                                 testsPassed: true, humanApproved: true)
             ])
@@ -1215,11 +1302,11 @@ final class AttestKitTests: XCTestCase {
     func testReporterLogColorBlockAndReviewTints() {
         let groups: [(commit: String, attestations: [Attestation])] = [
             (commit: "c1", attestations: [
-                makeAttestation(reviewer: "agent:claude", confidence: 0.3, verdict: .block,
+                makeAttestation(commit: "c1", reviewer: "agent:claude", confidence: 0.3, verdict: .block,
                                 testsPassed: false, humanApproved: false)
             ]),
             (commit: "c2", attestations: [
-                makeAttestation(reviewer: "human:leif", confidence: 0.6, verdict: .review,
+                makeAttestation(commit: "c2", reviewer: "human:leif", confidence: 0.6, verdict: .review,
                                 testsPassed: false, humanApproved: false)
             ])
         ]
@@ -1241,5 +1328,25 @@ final class AttestKitTests: XCTestCase {
         ]
         let out = Reporter.renderLog(groups, colorizer: Colorizer(enabled: true))
         XCTAssertTrue(out.contains("\(Self.esc)[32msigned[ok]\(Self.esc)[0m"))
+    }
+}
+
+// MARK: - Test helpers
+
+/// A store that files one attestation under a chosen note key, regardless of the record's
+/// own inner commit. This models a relocated git note (a cross-commit replay), which
+/// `InMemoryStore` cannot, since it keys by the record's own `commit`.
+fileprivate struct ReplayStore: AttestationStore {
+    let noteKey: String
+    let attestation: Attestation
+
+    func append(_ attestation: Attestation) throws {}
+
+    func attestations(for commit: String) throws -> [Attestation] {
+        commit == noteKey ? [attestation] : []
+    }
+
+    func attestedCommits() throws -> [String] {
+        [noteKey]
     }
 }

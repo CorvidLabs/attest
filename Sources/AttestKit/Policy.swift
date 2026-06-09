@@ -204,8 +204,19 @@ public struct Verifier: Sendable {
 
     // MARK: - Rules
 
-    private func evaluate(commit: String, attestations: [Attestation], now: Int) -> [Violation] {
+    private func evaluate(commit: String, attestations rawAttestations: [Attestation], now: Int) -> [Violation] {
         var violations: [Violation] = []
+
+        // Commit binding: an attestation is evidence only for the commit it names.
+        // The `commit` parameter is the git-note key the records are stored under;
+        // discard any record whose inner `commit` does not equal that key before any
+        // rule runs. This stops a legitimately signed attestation from being copied
+        // verbatim onto another commit (its signature still validates over its own
+        // unchanged bytes, but it does not name this commit, so it is not evidence
+        // for it). After filtering, the remaining records are the only ones the rules
+        // see, so `requireAttestation` correctly fails a commit whose only record was
+        // a transplanted one.
+        let attestations = rawAttestations.filter { $0.commit == commit }
 
         if attestations.isEmpty {
             if policy.requireAttestation {

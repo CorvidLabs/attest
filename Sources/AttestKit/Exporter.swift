@@ -16,27 +16,42 @@ public struct VerificationStatus: Sendable, Codable, Equatable {
     /// For a signed record, whether its embedded signature verifies against its
     /// embedded public key; `nil` for an unsigned record.
     public let verified: Bool?
+    /// Whether the record's inner `commit` matches the git-note key it is stored
+    /// under. A record whose inner `commit` differs from the commit it is attached
+    /// to has been relocated (a cross-commit replay): its signature may still verify
+    /// over its own unchanged bytes, but it is not evidence for the commit it is
+    /// filed against, so the verifier discards it. Defaults to `true`, so a status
+    /// computed without a note key keeps its prior shape.
+    public let commitMatches: Bool
 
-    public init(signed: Bool, verified: Bool?) {
+    public init(signed: Bool, verified: Bool?, commitMatches: Bool = true) {
         self.signed = signed
         self.verified = verified
+        self.commitMatches = commitMatches
     }
 
     enum CodingKeys: String, CodingKey {
         case signed
         case verified
+        case commitMatches
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(signed, forKey: .signed)
         try container.encodeIfPresent(verified, forKey: .verified)
+        // Only emit the flag when a record is mismatched, so a matching record's
+        // export stays byte-identical to the prior shape.
+        if !commitMatches {
+            try container.encode(commitMatches, forKey: .commitMatches)
+        }
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.signed = try container.decode(Bool.self, forKey: .signed)
         self.verified = try container.decodeIfPresent(Bool.self, forKey: .verified)
+        self.commitMatches = try container.decodeIfPresent(Bool.self, forKey: .commitMatches) ?? true
     }
 
     /// Computes the verification status for an attestation by running
@@ -46,6 +61,23 @@ public struct VerificationStatus: Sendable, Codable, Equatable {
             return VerificationStatus(signed: false, verified: nil)
         }
         return VerificationStatus(signed: true, verified: Ed25519Verifier.isValid(attestation))
+    }
+
+    /// Computes the verification status for an attestation stored under `noteKey`
+    /// (the commit it is filed against).
+    ///
+    /// In addition to the signature check, this binds the record to its commit: when
+    /// the attestation's inner `commit` does not equal `noteKey`, the record has been
+    /// relocated onto another commit and is not evidence for it. Such a record is
+    /// reported as `commitMatches == false` and is never reported as `verified == true`,
+    /// so a transplanted signed record is not surfaced as a valid signed record.
+    public static func evaluate(_ attestation: Attestation, noteKey: String) -> VerificationStatus {
+        let matches = attestation.commit == noteKey
+        guard attestation.isSigned else {
+            return VerificationStatus(signed: false, verified: nil, commitMatches: matches)
+        }
+        let verified = matches && Ed25519Verifier.isValid(attestation)
+        return VerificationStatus(signed: true, verified: verified, commitMatches: matches)
     }
 }
 
@@ -238,7 +270,10 @@ public struct Exporter: Sendable {
         for commit in commits {
             let attestations = try store.attestations(for: commit)
             let records = attestations.map { attestation in
-                AuditRecord(attestation: attestation, verification: VerificationStatus.evaluate(attestation))
+                AuditRecord(
+                    attestation: attestation,
+                    verification: VerificationStatus.evaluate(attestation, noteKey: commit)
+                )
             }
             var policyPassed: Bool?
             if let verifier {

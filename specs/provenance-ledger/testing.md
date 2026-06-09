@@ -27,12 +27,23 @@ deterministic canonical bytes.
 | `testPolicyRequireTestsPassedFails` | `requireTestsPassed` fails without a passing-tests record. |
 | `testHumanApprovalRequiredWhenVerdictAtLeastReview` | Conditional human-approval rule fires only at/above the threshold. |
 | `testRequireSignaturePolicy` | `requireSignature` passes only with a valid signed record. |
+| `testCommitBindingAttestationOnItsOwnCommitStillPasses` | A signed record on the commit it names still passes a strict policy. |
+| `testCommitBindingRejectsSignedRecordReplayedOntoAnotherCommit` | A signed record relocated onto another commit is discarded; `requireAttestation`/`requireSignature`/`minimumConfidence` all fail. |
+| `testCommitBindingMismatchedRecordDoesNotSatisfyPinningOrTrustedKeys` | A relocated record cannot satisfy `signerPinning`/`trustedKeys`/`requireSignatureWhenVerdictAtLeast`. |
+| `testCommitBindingExporterMarksMismatchAndDoesNotReportVerified` | The exporter marks a relocated record `commitMatches: false` / `verified: false`, commit fails policy. |
+| `testCommitBindingReporterRendersCommitMismatchBadge` | `attest log` renders a relocated record as `commit-mismatch`, not `signed[ok]`. |
 | `testMinimumConfidencePolicy` | `minimumConfidence` gates on the strongest attestation. |
 | `testPolicyDecodesFromJSON` / `testEmptyPolicyJSONUsesDefaults` | Policy JSON decoding and permissive defaults. |
 | `testAugurParsingMapsRiskToConfidence` | augur `riskScore` 45 → confidence 0.55, verdict copied. |
 | `testAugurParsingClampsAndDefaults` | Missing verdict is `nil`; risk 0 → confidence 1.0. |
 | `testAugurParsingRejectsMalformed` | Non-object / missing `riskScore` input throws. |
 | `testVerdictOrdering` | `proceed < review < block`. |
+
+## End-to-end (Tests/AttestKitTests/CrossCommitReplayTests.swift)
+
+| Test | Asserts |
+|------|---------|
+| `testReplayedSignedAttestationFailsStrictPolicyOnTargetCommit` | Against a temp repo: a signed record for commit A, copied verbatim onto commit B's note, no longer passes B's strict policy (`attest verify` exits 1); `attest log` renders `commit-mismatch` with a stderr warning and exit 1; the record on its own commit A still passes. |
 
 ## Manual / dogfood
 

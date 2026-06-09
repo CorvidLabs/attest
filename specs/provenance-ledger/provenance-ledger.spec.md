@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 7
+version: 8
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -114,6 +114,7 @@ Two design commitments make it usable everywhere:
 | `AuditReport.formatVersion` | The stable integer format version of the report document. |
 | `AuditReport.jsonString(pretty:)` / `jsonData(pretty:)` | Stable, sorted-key JSON of the report (pretty by default). |
 | `VerificationStatus.evaluate(_:)` | Compute a record's `signed` flag and (for signed records) whether it verifies. |
+| `VerificationStatus.evaluate(_:noteKey:)` | As above, but bound to the commit the record is filed under: a record whose inner `commit` differs from `noteKey` reports `commitMatches == false` and is never `verified == true`. |
 
 ### Types & Enums
 
@@ -129,7 +130,7 @@ Two design commitments make it usable everywhere:
 | `AuditReport` | The complete provenance trail across a range as one stable, `Codable` document. |
 | `AuditCommit` | One commit's `records` plus an optional `policyPassed`. |
 | `AuditRecord` | An `Attestation` paired with its computed `VerificationStatus`. |
-| `VerificationStatus` | A record's `signed` flag and (for signed records) `verified` result. |
+| `VerificationStatus` | A record's `signed` flag, (for signed records) `verified` result, and `commitMatches` flag (whether the record names the commit it is filed under). |
 | `Exporter` | Aggregates a range's attestations into an `AuditReport`. |
 | `ANSIColor` | The SGR codes (`red`/`amber`/`green`/`cyan`/`dim`/`bold`/`reset`) used for terminal styling. |
 | `Colorizer` | Wraps strings in ANSI codes when `enabled`; `.plain` is a pass-through gate for non-TTY/`--json` output. |
@@ -144,6 +145,19 @@ Two design commitments make it usable everywhere:
 - A signature produced by `Ed25519Signer.sign` verifies via `Ed25519Verifier.verify`; any
   mutation of a signed record's content (other than the signature pair) fails verification.
 - Multiple attestations per commit are permitted; stores append rather than replace.
+- **Commit binding.** Each attestation is bound to the commit it is filed against (the git-note key
+  it is stored under). Before any policy rule runs, `Verifier.evaluate` discards every attestation
+  whose inner `commit` does not equal the commit being evaluated. The canonical bytes include the
+  inner `commit`, so a signature is bound to that commit, but nothing in git prevents a holder of
+  write access to `refs/notes/attest` from copying a legitimately signed record off commit A and
+  filing it verbatim under commit B (its signature still validates over A's unchanged bytes). The
+  verifier therefore treats a relocated record as absent: a commit whose only record names a
+  different commit fails `requireAttestation`, `requireSignature`, `minimumConfidence`, and every
+  other evidence-requiring rule, so a signed attestation cannot be replayed onto another commit even
+  against a strict policy. This needs no change to the canonical serialization or the signature
+  format. In the audit export, `VerificationStatus.evaluate(_:noteKey:)` reports a relocated record
+  as `commitMatches == false` and never `verified == true`, and `attest log` renders it as
+  `commit-mismatch` (not `signed[ok]`), warns on stderr, and exits non-zero.
 - `requireHumanApprovalWhenVerdictAtLeast` is evaluated across all of a commit's
   attestations as a set: it triggers when any attestation's verdict is at or above the
   threshold, and is satisfied when any attestation on the commit is `humanApproved`. The
@@ -206,6 +220,10 @@ Two design commitments make it usable everywhere:
   `{ signed: false }` with `verified` omitted; a signed record reports
   `verified: true` only when its embedded signature validates over its canonical bytes
   against its embedded public key, and `false` for any tampered content or key mismatch.
+  The note-key form `VerificationStatus.evaluate(_:noteKey:)` additionally sets
+  `commitMatches` to whether the record's inner `commit` equals `noteKey`; a relocated record
+  (`commitMatches == false`) is never `verified == true`. The `commitMatches` field is encoded
+  only when `false`, so a matching record's exported JSON is byte-identical to the prior shape.
 - `Exporter.report` includes a per-commit `policyPassed` and a top-level `allPassed` only
   when a `Policy` is supplied; both are omitted otherwise, and the policy evaluation reuses
   the same `Verifier` as `attest verify`.
@@ -261,6 +279,12 @@ Two design commitments make it usable everywhere:
   unsigned record exports `"verification": { "signed": false }` (no `verified`).
 - `attest export --range A..B --policy .attest.json` adds a per-commit `policyPassed` and a
   top-level `allPassed`, computed with the same `Verifier` as `attest verify`.
+- A signed attestation for commit A copied verbatim onto commit B's note (a cross-commit replay)
+  no longer passes B's policy: `attest verify --commit B` with a strict policy
+  (`requireSignature` + `trustedKeys` + `minimumConfidence`) exits non-zero, because the verifier
+  discards the relocated record before any rule runs. `attest export` marks the record
+  `"commitMatches": false` / `"verified": false`, and `attest log` renders it `commit-mismatch`
+  with a stderr warning and a non-zero exit. The same record on its own commit A still passes.
 
 ## Error Cases
 
@@ -340,3 +364,16 @@ Two design commitments make it usable everywhere:
   unsigned/secondary text is dim. The CLI's `log`/`verify` subcommands add a `--color auto|always|never`
   option (default `auto`): `auto` enables colour only when stdout is a TTY and `NO_COLOR` is unset
   (https://no-color.org); `--json` and piped/non-TTY output stay plain. `export` is unchanged (always JSON).
+- v8: Commit binding, closing a cross-commit signature replay (no change to canonical serialization
+  or the signature format). Because the canonical bytes include the inner `commit`, a signature is
+  bound to the commit it names, but nothing checked that an attestation's inner `commit` equalled the
+  git-note key it was stored under, so a legitimately signed record could be copied verbatim off
+  commit A onto commit B and still validate as evidence for B. `Verifier.evaluate` now discards every
+  attestation whose inner `commit` differs from the commit being evaluated *before* any rule runs, so
+  a relocated record is treated as absent and a commit whose only record was transplanted fails
+  `requireAttestation` and every other evidence rule. The audit export gains
+  `VerificationStatus.evaluate(_:noteKey:)` and a `commitMatches` field (emitted only when `false`, so
+  a matching record's JSON is byte-identical to before); a relocated record reports
+  `commitMatches: false` and never `verified: true`. `attest log` renders a relocated record as
+  `commit-mismatch` (not `signed[ok]`), warns on stderr, and exits non-zero. Source-compatible and
+  additive: existing `VerificationStatus.evaluate(_:)` and all other APIs are unchanged.

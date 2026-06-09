@@ -13,6 +13,14 @@ A policy is evaluated against *all* of a commit's attestations as a set. The rul
 about "any attestation" or "some attestation" are satisfied (or violated) by records anywhere on
 the commit, not necessarily the same one.
 
+**Commit binding comes first.** Before any rule runs, the verifier discards any attestation whose
+inner `commit` does not equal the commit being evaluated (the git-note key it is stored under). A
+record that does not name the commit it is attached to has been relocated and is not evidence for
+that commit, so a legitimately signed record cannot be replayed onto another commit. After
+filtering, the rules below apply only to the remaining records; a commit whose only record was a
+transplanted one therefore fails `requireAttestation` like a commit with no records at all. See the
+[commit binding](signing.md#commit-binding-no-cross-commit-replay) section for the full threat model.
+
 > ## Read this before you trust a policy
 >
 > A policy gate is only as strong as the rules that bind a record to a key. Two defaults
