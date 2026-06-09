@@ -7,13 +7,61 @@ env:
 jobs:
   build-test:
     runs-on: [self-hosted, macOS]
+    # contents: write lets the dogfood step push the growing provenance ledger
+    # to refs/notes/attest on pushes to main (no-op on PRs — see the step below).
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - run: swift build
       - run: swift test
       - run: fledge spec check
-      - name: Dogfood attest verify (non-fatal)
+
+      # --- Dogfood: attest records signed provenance on its OWN CI commit. ---
+      # After build + test pass, attest attests this very commit, then gates it
+      # against the committed .attest.json policy. The .attest.json policy is
+      # permissive (it only requires an attestation), so this verify is a REAL,
+      # fatal gate that passes precisely because we just recorded an attestation.
+      - name: Build attest (release)
+        run: swift build -c release
+
+      - name: Dogfood — attest attests this CI commit
         run: |
-          echo "Dogfooding attest against its own latest commit."
-          echo "The repo may carry no attestations yet, so this step is informative, not gating."
-          swift run attest verify --range HEAD~1..HEAD --policy .attest.json || true
+          set -euo pipefail
+          ATTEST=".build/release/attest"
+          echo "attest is attesting its own CI commit $GITHUB_SHA"
+          # Record an agent:ci attestation on the commit under test. Signing in
+          # CI is optional (no key is provisioned) — an unsigned attestation is a
+          # valid record, which is the whole point of attest.
+          "$ATTEST" sign \
+            --commit "$GITHUB_SHA" \
+            --reviewer "agent:ci" \
+            --confidence 0.9 \
+            --tests-passed \
+            --verdict proceed \
+            --note "CI: swift build + swift test + fledge spec check all green"
+
+      - name: Dogfood — verify the CI commit against .attest.json (fatal gate)
+        run: |
+          set -euo pipefail
+          ATTEST=".build/release/attest"
+          echo "== ledger for $GITHUB_SHA =="
+          "$ATTEST" log --commit "$GITHUB_SHA" --color always
+          echo "== verify against the committed policy (fatal) =="
+          # No `|| true`: a policy violation here is a real failure. The
+          # committed .attest.json is permissive enough that the attestation we
+          # just recorded satisfies it.
+          "$ATTEST" verify --commit "$GITHUB_SHA" --policy .attest.json --color always
+
+      # PREFERRED real dogfooding: push the notes ref so attest's repo
+      # accumulates a provenance ledger over time. Guarded to push only on a
+      # push to main (never on PRs, which run from forks/branches and lack the
+      # write token reliably). The push is best-effort: a permissions or race
+      # issue prints a notice instead of reddening CI, so the gate above remains
+      # the only thing that can fail this job.
+      - name: Dogfood — push the provenance ledger (main only, best-effort)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -uo pipefail
+          echo "pushing refs/notes/attest so the ledger travels with the repo"
+          git push origin refs/notes/attest || echo "note push skipped (perms/race) — ledger recorded locally for this run"

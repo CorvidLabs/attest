@@ -360,6 +360,17 @@ In-depth docs live in [`docs/`](docs/):
   `trustedKeys`/`signerPinning`, and preventing reviewer spoofing.
 - [`docs/ci-integration.md`](docs/ci-integration.md) — self-hosted macOS, the `attest-verify`
   action, the augur → attest trust pipeline, and audit export for compliance.
+- [`docs/dogfooding.md`](docs/dogfooding.md) — **proof:** attest attests attest. Real captured
+  output of attest recording + verifying provenance on its own commits (a PASS and a FAIL),
+  plus the growing CI provenance ledger. Reproduce with [`examples/dogfood.sh`](examples/dogfood.sh).
+
+## Dogfooding (proof)
+
+attest uses itself: every commit on `main` gets an `agent:ci` attestation recorded **by attest,
+on attest's own history**, gated against [`​.attest.json`](.attest.json) in CI, with the ledger
+pushed to `refs/notes/attest` so it accumulates over time. Run [`examples/dogfood.sh`](examples/dogfood.sh)
+to see attest attest its real `HEAD` and both pass a lax policy and fail a strict one. Full
+captured proof and the CI wiring live in [`docs/dogfooding.md`](docs/dogfooding.md).
 
 ## Development
 
