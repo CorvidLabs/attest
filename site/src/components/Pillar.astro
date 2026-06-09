@@ -38,6 +38,10 @@ const { step, title, command, subItems, badge } = Astro.props
     border-left: 3px solid var(--accent);
     position: relative;
     transition: background .15s;
+    /* Let the grid item shrink below its content's intrinsic width so the
+       p-cmd command scrolls instead of stretching the column past the
+       viewport (mobile horizontal overflow). */
+    min-width: 0;
   }
   .pillar:hover { background: var(--bg-raised); }
 
