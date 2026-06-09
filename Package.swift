@@ -38,6 +38,7 @@ let package = Package(
         .testTarget(
             name: "AttestKitTests",
             dependencies: ["AttestKit"],
+            exclude: ["__snapshots__"],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
