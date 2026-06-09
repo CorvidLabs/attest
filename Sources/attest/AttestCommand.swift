@@ -17,7 +17,7 @@ struct AttestCommand: AsyncParsableCommand {
         and agent loops gate on the recorded trust.
         """,
         version: "0.1.0",
-        subcommands: [Sign.self, Verify.self, Log.self, Keygen.self],
+        subcommands: [Sign.self, Verify.self, Log.self, Export.self, Keygen.self],
         defaultSubcommand: Log.self
     )
 }
@@ -241,6 +241,61 @@ struct Log: AsyncParsableCommand {
     private struct LogEntry: Encodable {
         let commit: String
         let attestations: [Attestation]
+    }
+}
+
+// MARK: - export
+
+struct Export: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Emit the complete provenance trail across a range as one stable JSON audit document.",
+        discussion: """
+        Unlike `log` (a human/diagnostic listing), `export` produces a single \
+        deterministic JSON document for compliance archival: every commit in the \
+        range, each attestation enriched with its cryptographic verification \
+        status, and — when `--policy` is given — a per-commit pass/fail. Commits \
+        appear oldest-first (the order `git rev-list --reverse` returns), keys are \
+        sorted, so the output is stable and diff-friendly. Output is always JSON.
+        """
+    )
+
+    @OptionGroup var repo: RepoOptions
+
+    @Option(name: .long, help: "A git range to export, e.g. 'main..HEAD'.")
+    var range: String?
+
+    @Option(name: .long, help: "Export a single commit (SHA or revision).")
+    var commit: String?
+
+    @Option(name: .long, help: "Optional policy file; when set, each commit's pass/fail is included.")
+    var policy: String?
+
+    @Flag(name: .long, inversion: .prefixedNo, help: "Pretty-print the JSON (default: on).")
+    var pretty = true
+
+    func run() async throws {
+        let store = try repo.makeStore()
+
+        // Range resolution mirrors `verify`/`log`: a single commit, an oldest-first
+        // range, or every attested commit when neither is given.
+        let commits: [String]
+        if let commit {
+            commits = [try store.resolve(revision: commit)]
+        } else if let range {
+            commits = try store.commits(inRange: range)
+        } else {
+            commits = try store.attestedCommits()
+        }
+
+        // Only load a policy when one was explicitly requested; export never
+        // requires a policy file to exist.
+        var loadedPolicy: Policy?
+        if let policy {
+            loadedPolicy = try Policy.load(fromFile: policy)
+        }
+
+        let report = try Exporter(store: store).report(commits: commits, policy: loadedPolicy)
+        print(try report.jsonString(pretty: pretty))
     }
 }
 
