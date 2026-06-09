@@ -15,6 +15,32 @@ the repository to operate on.
 attest <subcommand> [options]
 ```
 
+## Colored output
+
+The human-readable output of `verify` and `log` is **semantically colored**: green for
+PASS / `proceed` / verified signatures, amber for `review`, red for FAIL / `block` /
+violations, cyan for reviewer identities, and dim for secondary text (unsigned records,
+absent `tests`/`human`, notes). Colour is *meaning*, not decoration — it is independent
+of any brand colour.
+
+Colour is controlled by `--color <mode>` on `verify` and `log`:
+
+| Mode | Behaviour |
+|------|-----------|
+| `auto` *(default)* | colorize only when stdout is a TTY **and** [`NO_COLOR`](https://no-color.org) is unset. |
+| `always` | colorize even when piped or redirected. |
+| `never` | never emit ANSI escape codes. |
+
+In `auto`, piping or redirecting (`attest log | less`, `> file`) and any `--json` output
+stay **plain** — byte-identical to `--color never` — so scripts and pipelines are
+unaffected. Setting the `NO_COLOR` environment variable disables colour in `auto` mode.
+
+```sh
+attest log --color always | less -R    # keep colour through a pager
+NO_COLOR=1 attest verify --range main..HEAD   # force plain output
+attest log --json                       # JSON is always plain
+```
+
 ## Exit codes
 
 | Command | Exit 0 | Exit 1 | Other non-zero |
@@ -74,10 +100,25 @@ Exit non-zero if any commit in a range violates the policy — the gate for CI a
 | `--commit <rev>` | — | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
 | `--policy <path>` | `.attest.json` | path to the policy file (falls back to the permissive default if absent). |
 | `--json` | off | emit machine-readable JSON instead of the human report. |
+| `--color <mode>` | `auto` | colorize the human report: `auto` (TTY only), `always`, or `never`. |
 
 ```sh
 attest verify --range origin/main..HEAD --policy .attest.json
 attest verify --commit HEAD --json
+```
+
+The human report is a single headline line (PASS green, FAIL red), with any violations
+listed beneath in red under an amber heading:
+
+```
+attest verify · [ok] PASS (3 commits checked)
+```
+
+```
+attest verify · [x] FAIL (2 commits checked)
+
+  violations:
+    x abc1234567  requireTestsPassed: no attestation reports passing tests
 ```
 
 JSON shape:
@@ -99,6 +140,7 @@ List recorded attestations, human-readable or JSON. This is the **default** subc
 | `--range <a..b>` | — | limit to a git range. |
 | `--commit <rev>` | — | limit to a single commit. |
 | `--json` | off | emit machine-readable JSON. |
+| `--color <mode>` | `auto` | colorize the listing: `auto` (TTY only), `always`, or `never`. |
 
 With neither `--range` nor `--commit`, `log` lists every attested commit.
 
@@ -106,6 +148,20 @@ With neither `--range` nor `--commit`, `log` lists every attested commit.
 attest log                        # all attested commits
 attest log --commit HEAD --json   # one commit, machine-readable
 attest log --range main..HEAD
+```
+
+The listing groups attestations by commit. Each row is colorized by meaning — the
+verdict badge and `verdict:`/`conf:` tints track severity (green `proceed`, amber
+`review`, red `block`), reviewer identities are cyan, `tests:ok` / `human:ok` /
+`signed[ok]` are green, and unsigned / absent cues are dim:
+
+```
+attest · ledger
+
+  commit abc1234567  (2 attestations)
+    [ok] agent:claude  verdict:proceed  conf:95%  tests:ok  human:—  unsigned
+    [!] human:leif  verdict:review  conf:72%  tests:ok  human:ok  signed[ok]
+        note: reviewed the migration by hand
 ```
 
 `log` is a *human / diagnostic* listing. For a durable, machine-stable audit document, use

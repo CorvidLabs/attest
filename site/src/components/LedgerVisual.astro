@@ -19,7 +19,7 @@ const { ariaLabel = 'attest ledger showing a signed verified attestation and a f
           <span class="rec-verdict">verdict:proceed</span>
           <span class="rec-conf">conf:92%</span>
         </div>
-        <div class="rec-meta">tests:ok · human:— · <span class="rec-signed">signed [verified]</span></div>
+        <div class="rec-meta">tests:ok · human:— · <span class="rec-signed">signed[ok]</span></div>
       </div>
 
       <!-- A separate human sign-off -->
@@ -30,7 +30,7 @@ const { ariaLabel = 'attest ledger showing a signed verified attestation and a f
           <span class="rec-verdict">verdict:review</span>
           <span class="rec-conf">conf:95%</span>
         </div>
-        <div class="rec-meta">tests:ok · human:ok · <span class="rec-signed">signed [verified]</span></div>
+        <div class="rec-meta">tests:ok · human:ok · <span class="rec-signed">signed[ok]</span></div>
       </div>
 
       <!-- A spoof attempt: claims human:leif but unsigned -->
@@ -50,7 +50,7 @@ const { ariaLabel = 'attest ledger showing a signed verified attestation and a f
   </div>
 
   <div class="ledger-footer" aria-live="polite">
-    <span class="verify-fail">✗ verify exit 1</span>
+    <span class="verify-fail">attest verify · [x] FAIL — exit 1</span>
     <span class="verify-hint"> — <code>human:leif</code> is pinned but this record is unsigned</span>
   </div>
 </figure>
@@ -100,7 +100,8 @@ const { ariaLabel = 'attest ledger showing a signed verified attestation and a f
     border-radius: 5px; font-weight: 700; font-size: 0.75rem; flex-shrink: 0; }
   .rec-badge-ok { background: var(--ok-muted); color: var(--ok-bright); border: 1px solid rgba(52,211,153,0.3); }
   .rec-badge-spoof { background: var(--warn-muted); color: var(--warn); border: 1px solid rgba(251,191,36,0.35); }
-  .rec-who { color: var(--text); font-weight: 600; }
+  /* reviewer identities are cyan, mirroring the CLI's terminal colour */
+  .rec-who { color: var(--info); font-weight: 600; }
   .rec-verdict { color: var(--text-muted); }
   .rec-conf { color: var(--ok-bright); }
   .rec-meta { color: var(--text-dim); font-size: 0.8125rem; margin-top: 4px; padding-left: 32px; }

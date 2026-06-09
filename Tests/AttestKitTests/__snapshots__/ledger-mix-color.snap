@@ -1,0 +1,6 @@
+[1mattest · ledger[0m
+
+[2m  commit abc1234567  (2 attestations)[0m
+    [32m[ok][0m [36magent:claude[0m  [32mverdict:proceed[0m  [32mconf:95%[0m  [32mtests:ok[0m  [2mhuman:—[0m  [2munsigned[0m
+    [33m[!][0m [36mhuman:leif[0m  [33mverdict:review[0m  [33mconf:72%[0m  [32mtests:ok[0m  [32mhuman:ok[0m  [32msigned[ok][0m
+[2m        note: reviewed the migration by hand[0m
