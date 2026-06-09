@@ -254,6 +254,127 @@ final class AttestKitTests: XCTestCase {
         XCTAssertEqual(result.violations.first?.rule, "requireTestsPassed")
     }
 
+    // MARK: - Audit export
+
+    func testExportProducesCompleteDeterministicReport() throws {
+        // Two commits, multiple attestations on one of them. The export must
+        // cover every supplied commit, in supplied order, with records oldest-first.
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1", reviewer: "agent:claude", confidence: 0.9))
+        try store.append(makeAttestation(commit: "c1", reviewer: "human:leif", confidence: 0.7, verdict: .review))
+        try store.append(makeAttestation(commit: "c2", reviewer: "agent:claude", confidence: 0.5))
+
+        let report = try Exporter(store: store).report(commits: ["c1", "c2"])
+        XCTAssertEqual(report.version, AuditReport.formatVersion)
+        XCTAssertEqual(report.commitCount, 2)
+        XCTAssertEqual(report.recordCount, 3)
+        XCTAssertFalse(report.policyApplied)
+        XCTAssertNil(report.allPassed)
+        // Commits in supplied order; records oldest-first within a commit.
+        XCTAssertEqual(report.commits.map(\.commit), ["c1", "c2"])
+        XCTAssertEqual(report.commits[0].records.count, 2)
+        XCTAssertEqual(report.commits[0].records[0].attestation.reviewer, "agent:claude")
+        XCTAssertEqual(report.commits[0].records[1].attestation.reviewer, "human:leif")
+        XCTAssertNil(report.commits[0].policyPassed)
+
+        // Determinism: identical inputs yield byte-identical JSON.
+        let first = try report.jsonString(pretty: false)
+        let second = try Exporter(store: store).report(commits: ["c1", "c2"]).jsonString(pretty: false)
+        XCTAssertEqual(first, second)
+        XCTAssertTrue(first.contains("\"commitCount\":2"))
+    }
+
+    func testExportCoversEmptyCommitWithNoRecords() throws {
+        // A commit with no attestations is still represented (empty records),
+        // so an auditor sees the full surface of the range.
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "c1"))
+        let report = try Exporter(store: store).report(commits: ["c1", "empty"])
+        XCTAssertEqual(report.commitCount, 2)
+        XCTAssertEqual(report.recordCount, 1)
+        XCTAssertEqual(report.commits[1].commit, "empty")
+        XCTAssertTrue(report.commits[1].records.isEmpty)
+    }
+
+    func testExportReportsVerificationStatusForSignedAndUnsigned() throws {
+        let store = InMemoryStore()
+        let signer = Ed25519Signer.generate()
+        let signed = try signer.sign(makeAttestation(commit: "c1", reviewer: "human:leif"))
+        try store.append(signed)
+        try store.append(makeAttestation(commit: "c1", reviewer: "agent:claude")) // unsigned
+
+        let report = try Exporter(store: store).report(commits: ["c1"])
+        let records = report.commits[0].records
+        XCTAssertEqual(records.count, 2)
+        // Signed record verifies against its embedded key.
+        XCTAssertTrue(records[0].verification.signed)
+        XCTAssertEqual(records[0].verification.verified, true)
+        // Unsigned record: signed=false, verified omitted (nil).
+        XCTAssertFalse(records[1].verification.signed)
+        XCTAssertNil(records[1].verification.verified)
+    }
+
+    func testExportFlagsTamperedAndWrongKeySignaturesAsUnverified() throws {
+        let store = InMemoryStore()
+        let signer = Ed25519Signer.generate()
+        let other = Ed25519Signer.generate()
+        let signed = try signer.sign(makeAttestation(commit: "c1", confidence: 0.9))
+        // Tamper: keep the signature pair but change content.
+        let tampered = Attestation(
+            commit: signed.commit,
+            reviewer: signed.reviewer,
+            confidence: 0.1,
+            verdict: signed.verdict,
+            testsPassed: signed.testsPassed,
+            humanApproved: signed.humanApproved,
+            timestamp: signed.timestamp,
+            note: signed.note,
+            signature: signed.signature,
+            publicKey: signed.publicKey
+        )
+        // Wrong key: a valid signature from one signer, but another signer's public key.
+        let wrongKey = signed.attaching(signature: signed.signature ?? "", publicKey: other.base64PublicKey)
+        try store.append(tampered)
+        try store.append(wrongKey)
+
+        let report = try Exporter(store: store).report(commits: ["c1"])
+        let records = report.commits[0].records
+        XCTAssertTrue(records[0].verification.signed)
+        XCTAssertEqual(records[0].verification.verified, false)
+        XCTAssertTrue(records[1].verification.signed)
+        XCTAssertEqual(records[1].verification.verified, false)
+    }
+
+    func testExportIncludesPerCommitPolicyPassFail() throws {
+        let store = InMemoryStore()
+        try store.append(makeAttestation(commit: "good", testsPassed: true))
+        try store.append(makeAttestation(commit: "bad", testsPassed: false))
+
+        let report = try Exporter(store: store).report(
+            commits: ["good", "bad"],
+            policy: Policy(requireTestsPassed: true)
+        )
+        XCTAssertTrue(report.policyApplied)
+        XCTAssertEqual(report.allPassed, false)
+        XCTAssertEqual(report.commits[0].policyPassed, true)
+        XCTAssertEqual(report.commits[1].policyPassed, false)
+    }
+
+    func testExportReportRoundTripsThroughJSON() throws {
+        let store = InMemoryStore()
+        let signer = Ed25519Signer.generate()
+        try store.append(try signer.sign(makeAttestation(commit: "c1", note: "ok")))
+        let report = try Exporter(store: store).report(
+            commits: ["c1"],
+            policy: Policy(requireSignature: true)
+        )
+        let data = try report.jsonData(pretty: false)
+        let decoded = try JSONDecoder().decode(AuditReport.self, from: data)
+        XCTAssertEqual(decoded, report)
+        XCTAssertEqual(decoded.allPassed, true)
+        XCTAssertEqual(decoded.commits[0].policyPassed, true)
+    }
+
     // MARK: - Augur integration
 
     func testAugurParsingMapsRiskToConfidence() throws {
