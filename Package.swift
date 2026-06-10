@@ -5,10 +5,7 @@ import PackageDescription
 let package = Package(
     name: "attest",
     platforms: [
-        .macOS(.v13),
-        .iOS(.v15),
-        .tvOS(.v15),
-        .watchOS(.v8),
+        .macOS(.v13)
     ],
     products: [
         .executable(name: "attest", targets: ["attest"]),
