@@ -115,7 +115,8 @@ jobs:
           set -euo pipefail
           swift build -c release
           cp "$(swift build -c release --show-bin-path)/attest" attest-linux-x86_64
-          file attest-linux-x86_64
+          # NOTE: no `file` here — the swift:6.0 image doesn't ship it. Use ls -l.
+          ls -l attest-linux-x86_64
           sha256sum attest-linux-x86_64 | cut -d' ' -f1 > attest-linux-x86_64.sha256
           cat attest-linux-x86_64.sha256
 
