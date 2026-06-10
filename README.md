@@ -6,6 +6,10 @@
 [![CI](https://github.com/CorvidLabs/attest/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/attest/actions/workflows/ci.yml)
 [![docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Fattest-blue)](https://corvidlabs.github.io/attest/)
 
+<p align="center">
+  <img src="site/public/demo.gif" alt="attest sign records a signed attestation, attest log shows the ledger, attest verify passes the policy" width="760">
+</p>
+
 ```sh
 brew install corvidlabs/tap/attest
 ```

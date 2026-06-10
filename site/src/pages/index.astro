@@ -60,26 +60,15 @@ const VERSION = `v${changelog.match(/##\s*\[v?([0-9][^\]\s]*)\]/)?.[1] ?? '0.0.0
       <h2 id="demo-h">Trust that <em>travels with the repo.</em></h2>
       <p>An agent records its verdict; a human signs off; a policy gates the merge. The record lives in <code>refs/notes/attest</code> and moves with every <code>git push</code>.</p>
     </header>
-    <Terminal title="attest log then verify" ariaLabel="Showing the colored attestation ledger then verifying it against a policy">
-      <div class="term-line"><span class="term-comment"># an agent scores the diff with augur and records it; a human files a signed sign-off</span></div>
-      <div class="term-line"><span class="term-prompt">$</span> augur check --json | attest sign --commit HEAD --reviewer agent:claude --from-augur - --tests-passed</div>
-      <div class="term-line"><span class="term-prompt">$</span> attest sign --commit HEAD --reviewer human:leif --confidence 0.72 --verdict review --human-approved --tests-passed --sign</div>
-      <div class="term-line">&nbsp;</div>
-      <div class="term-line"><span class="term-comment"># the ledger, in colour: green = proceed/verified, amber = review, cyan = reviewer, dim = unsigned</span></div>
-      <div class="term-line"><span class="term-prompt">$</span> attest log --commit HEAD</div>
-      <div class="term-line"><span class="term-bold">attest · ledger</span></div>
-      <div class="term-line">&nbsp;</div>
-      <div class="term-line"><span class="term-dim">&nbsp;&nbsp;commit abc1234567  (2 attestations)</span></div>
-      <div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-good">[ok]</span> <span class="term-info">agent:claude</span>  <span class="term-good">verdict:proceed</span>  <span class="term-good">conf:95%</span>  <span class="term-good">tests:ok</span>  <span class="term-dim">human:-</span>  <span class="term-dim">unsigned</span></div>
-      <div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-warn">[!]</span> <span class="term-info">human:leif</span>  <span class="term-warn">verdict:review</span>  <span class="term-warn">conf:72%</span>  <span class="term-good">tests:ok</span>  <span class="term-good">human:ok</span>  <span class="term-good">signed[ok]</span></div>
-      <div class="term-line"><span class="term-dim">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note: reviewed the migration by hand</span></div>
-      <div class="term-line">&nbsp;</div>
-      <div class="term-line"><span class="term-comment"># CI / the agent gates on the policy: exit code is the contract</span></div>
-      <div class="term-line"><span class="term-prompt">$</span> attest verify --range origin/main..HEAD --policy .attest.json</div>
-      <div class="term-line"><span class="term-bold">attest verify ·</span> <span class="term-good-bold">[ok] PASS</span> <span class="term-dim">(3 commits checked)</span></div>
-      <div class="term-line"><span class="term-prompt">$</span> echo $?</div>
-      <div class="term-line"><span class="term-out">0</span><span class="blink" aria-hidden="true"></span></div>
-    </Terminal>
+    <img
+      class="demo-gif"
+      src={`${base}demo.gif`}
+      alt="attest sign records a signed attestation for the HEAD commit; attest log prints the colored ledger showing the reviewer, 92% confidence, passing tests and a valid signature; attest verify checks it against release.json and passes."
+      width="1200"
+      height="800"
+      loading="lazy"
+      decoding="async"
+    />
   </div>
 </section>
 
@@ -192,6 +181,8 @@ const VERSION = `v${changelog.match(/##\s*\[v?([0-9][^\]\s]*)\]/)?.[1] ?? '0.0.0
   .stat .lbl { color: var(--text); font-size: 1rem; margin-top: 8px; font-weight: 500; }
   .stat .sub { color: var(--text-muted); font-size: 0.875rem; margin-top: 4px; }
   .terminal-demo { padding: 90px 0 30px; }
+  .demo-gif { width: 100%; max-width: 880px; height: auto; border-radius: 12px;
+    border: 1px solid var(--border); box-shadow: 0 24px 60px -20px rgba(0,0,0,0.55); display: block; }
   .section-head { margin-bottom: 32px; }
   .section-eyebrow { color: var(--accent-bright); font-size: 0.875rem; font-weight: 600;
     letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 14px; }
