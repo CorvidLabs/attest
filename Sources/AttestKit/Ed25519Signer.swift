@@ -1,5 +1,5 @@
 @preconcurrency import Foundation
-import Crypto
+@preconcurrency import Crypto
 
 // MARK: - Signer
 

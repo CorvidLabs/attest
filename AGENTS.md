@@ -36,11 +36,19 @@ trust-record companion to `augur`: augur scores diff risk, attest records the tr
 
 ## CI / platform
 
-attest is **macOS-only for now**. Do not add Linux/Windows runners or support. CI
-runs on the self-hosted **macOS ARM64** runners (`runs-on: [self-hosted, macOS]`):
-`swift build`, `swift test`, `fledge spec check`, plus a non-fatal dogfood step that
-runs `attest verify` against the latest commit. The composite action in `action.yml`
-builds attest from its own checkout; cross-repo binary packaging is deferred.
+attest supports **macOS and Linux**. Windows is out of scope.
+
+CI runs two jobs:
+
+- **`build-test-macos`** (`runs-on: macos-latest`): `swift build`, `swift test`,
+  `fledge spec check`, plus the dogfood sign/verify/notes steps.
+- **`build-test-linux`** (`runs-on: ubuntu-latest`, `container: swift:6.0`):
+  `swift build` and `swift test` only. No brew, fledge, dogfood, or notes steps.
+
+The composite action in `action.yml` builds attest from its own checkout;
+cross-repo binary packaging is deferred.
+
+Do not add Windows runners or Windows-specific code.
 
 ## Workflow
 

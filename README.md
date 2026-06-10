@@ -25,7 +25,7 @@ gate on. **augur scores the risk; attest records the trust.**
 
 ## Quickstart
 
-**Install** (macOS). The fastest path is Homebrew:
+**Install** (macOS). The fastest path is Homebrew (macOS binary only):
 
 ```sh
 brew install corvidlabs/tap/attest
@@ -114,7 +114,7 @@ context is lost the moment the PR merges. `attest` is that missing primitive:
 
 ## Install
 
-The recommended install is Homebrew, which pulls a prebuilt macOS universal binary:
+The recommended install on macOS is Homebrew, which pulls a prebuilt universal binary:
 
 ```sh
 brew install corvidlabs/tap/attest
@@ -316,7 +316,7 @@ violation:
 ```yaml
 jobs:
   trust:
-    runs-on: [self-hosted, macOS]   # macOS-only for now
+    runs-on: macos-latest   # composite action targets macOS
     steps:
       - uses: actions/checkout@v4
       - uses: CorvidLabs/attest@main
@@ -336,10 +336,9 @@ The action has no outputs; its contract is the **exit code**. A policy violation
 propagates `attest`'s non-zero exit and fails the job.
 
 > **Honest scope.** The action builds `attest` from *its own* checkout with
-> `swift build -c release` and runs on the self-hosted **macOS ARM64** runners
-> (`runs-on: [self-hosted, macOS]`). Cross-repo packaging (shipping a prebuilt
-> `attest` and installing it into *other* repos without a Swift toolchain) is a
-> deferred later step.
+> `swift build -c release` and currently targets macOS runners. Cross-repo
+> packaging (shipping a prebuilt `attest` and installing it into other repos
+> without a Swift toolchain) is a deferred later step.
 
 ### For agents
 
@@ -460,7 +459,7 @@ In-depth docs live in [`docs/`](docs/):
   `keygen`) with examples and exit codes.
 - [`docs/signing.md`](docs/signing.md): `keygen`, Ed25519, optional signing,
   `trustedKeys`/`signerPinning`, and preventing reviewer spoofing.
-- [`docs/ci-integration.md`](docs/ci-integration.md): self-hosted macOS, the `attest-verify`
+- [`docs/ci-integration.md`](docs/ci-integration.md): macOS and Linux CI, the `attest-verify`
   action, the augur → attest trust pipeline, and audit export for compliance.
 - [`docs/dogfooding.md`](docs/dogfooding.md): **proof:** attest attests attest. Real captured
   output of attest recording + verifying provenance on its own commits (a PASS and a FAIL),
@@ -522,10 +521,9 @@ The full signed lifecycle (`keygen` → `--sign` → `signed[ok]` → `verify` a
 
 ## Limitations & roadmap
 
-- **macOS-only for now.** The git-notes store, signing, CI, and the composite
-  action all target macOS (the package targets `.macOS(.v13)`; CI runs on
-  `runs-on: [self-hosted, macOS]`). Linux/Windows support is plausible via
-  Foundation `Process` + swift-crypto but is not yet on the matrix.
+- **macOS and Linux.** CI runs on both platforms (`build-test-macos` and
+  `build-test-linux`). The Homebrew prebuilt binary and the composite `action.yml`
+  currently target macOS. Windows is out of scope.
 - The composite action (`action.yml`) builds `attest` from its own checkout.
   **Cross-repo packaging** (shipping a prebuilt binary and installing it into
   other repos without a Swift toolchain) is a deferred later step.

@@ -5,12 +5,13 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 jobs:
-  build-test:
-    # GitHub-hosted, ephemeral runner. Never use self-hosted runners on a public
-    # repo: a pull_request from a fork would run untrusted code on the host.
+  # -----------------------------------------------------------------------
+  # macOS: full pipeline — build, test, spec check, dogfood, notes push.
+  # -----------------------------------------------------------------------
+  build-test-macos:
     runs-on: macos-latest
     # contents: write lets the dogfood step push the growing provenance ledger
-    # to refs/notes/attest on pushes to main (no-op on PRs — see the step below).
+    # to refs/notes/attest on pushes to main (no-op on PRs -- see the step below).
     # statuses: write lets the step below post a GitHub commit status named
     # "attest" so provenance surfaces as a check on the commit and PR pages
     # (git notes themselves are not shown in the GitHub web UI).
@@ -38,7 +39,7 @@ jobs:
       - name: Build attest (release)
         run: swift build -c release
 
-      - name: Dogfood — attest attests this CI commit
+      - name: Dogfood -- attest attests this CI commit
         env:
           # Use the same SHA the verify step and commit status use: the PR head
           # on a pull_request, the pushed SHA otherwise. Signing the merge SHA on
@@ -53,7 +54,7 @@ jobs:
           git fetch origin "+refs/notes/attest:refs/notes/attest" 2>/dev/null || true
           echo "attest is attesting its own CI commit $ATTEST_SHA"
           # Record an agent:ci attestation on the commit under test. Signing in
-          # CI is optional (no key is provisioned) — an unsigned attestation is a
+          # CI is optional (no key is provisioned) -- an unsigned attestation is a
           # valid record, which is the whole point of attest.
           "$ATTEST" sign \
             --commit "$ATTEST_SHA" \
@@ -63,7 +64,7 @@ jobs:
             --verdict proceed \
             --note "CI: swift build + swift test + fledge spec check all green"
 
-      - name: Dogfood — verify the CI commit against .attest.json (fatal gate)
+      - name: Dogfood -- verify the CI commit against .attest.json (fatal gate)
         id: verify
         env:
           # The PR head SHA on a pull_request event, the pushed SHA otherwise.
@@ -118,9 +119,28 @@ jobs:
       # write token reliably). The push is best-effort: a permissions or race
       # issue prints a notice instead of reddening CI, so the gate above remains
       # the only thing that can fail this job.
-      - name: Dogfood — push the provenance ledger (main only, best-effort)
+      - name: Dogfood -- push the provenance ledger (main only, best-effort)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -uo pipefail
           echo "pushing refs/notes/attest so the ledger travels with the repo"
-          git push origin refs/notes/attest || echo "note push skipped (perms/race) — ledger recorded locally for this run"
+          git push origin refs/notes/attest || echo "note push skipped (perms/race) -- ledger recorded locally for this run"
+
+  # -----------------------------------------------------------------------
+  # Linux: swift build + swift test only.
+  # Brew, fledge, dogfood, and notes steps are macOS-only and stay above.
+  # -----------------------------------------------------------------------
+  build-test-linux:
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The Swift container runs as root; mark the checkout safe so git
+      # commands inside tests do not refuse to run in the directory.
+      - name: Mark checkout as safe for git
+        run: git config --global --add safe.directory '*'
+      - run: swift build
+      - run: swift test
