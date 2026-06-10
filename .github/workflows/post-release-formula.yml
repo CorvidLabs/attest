@@ -69,8 +69,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::TAP_GITHUB_TOKEN secret is required"
-            exit 1
+            echo "::warning::TAP_GITHUB_TOKEN not set; skipping the automatic Homebrew formula bump. Update CorvidLabs/homebrew-tap manually, or set the secret to enable this."
+            exit 0
           fi
           git clone "https://x-access-token:${GH_TOKEN}@github.com/CorvidLabs/homebrew-tap.git" /tmp/homebrew-tap
           cd /tmp/homebrew-tap
