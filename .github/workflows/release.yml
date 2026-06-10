@@ -22,7 +22,10 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'
+      # Only full semver tags (v1.2.3), NOT the moving major alias (v0). The
+      # move-major-tag job force-pushes v0; matching 'v*' here would re-trigger
+      # this workflow on that alias and fail the semver guard noisily.
+      - 'v*.*.*'
   workflow_dispatch:
 
 jobs:
