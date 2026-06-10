@@ -99,6 +99,11 @@ jobs:
     # artifacts off; upload-linux (on the host runner, which has gh) publishes them.
     container: swift:6.0
     timeout-minutes: 25
+    # Container jobs default to `sh` (dash), which rejects `set -o pipefail`;
+    # force bash so the build script's bashisms work.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
