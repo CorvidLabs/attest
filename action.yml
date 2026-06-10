@@ -1,8 +1,7 @@
 name: "attest verify"
 description: >-
-  Verify a commit range against an .attest.json policy, failing the job on any
-  violation. Signing optional, no API key. Installs a prebuilt attest binary for
-  the runner; builds from source only as a fallback.
+  Gate a commit range against an .attest.json policy; fail on any violation.
+  Installs a prebuilt attest, no Swift needed.
 author: "CorvidLabs"
 
 branding:
