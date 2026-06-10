@@ -41,9 +41,10 @@ checkout and runs `attest verify`, failing the job on any policy violation:
 ```yaml
 jobs:
   trust:
-    runs-on: macos-latest   # composite action targets macOS
+    runs-on: macos-latest   # any runner with a Swift 6 toolchain works
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # range needs history
       - uses: CorvidLabs/attest@v0   # pin to the major tag, not @main
         with:
           range: origin/main..HEAD   # default

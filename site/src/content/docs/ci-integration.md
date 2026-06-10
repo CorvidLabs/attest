@@ -9,8 +9,8 @@ order: 1
 trust a policy demands. This guide covers running it on macOS and Linux, the bundled `attest-verify`
 composite action, the augur to attest trust pipeline, and exporting an audit trail for compliance.
 
-> **Platform.** `attest` supports **macOS and Linux**. The composite action currently targets macOS.
-> Windows is out of scope.
+> **Platform.** `attest` supports **macOS and Linux**. The composite action runs on any runner with
+> a Swift 6 toolchain (`macos-latest`, or a Linux `swift:6.0` container). Windows is out of scope.
 
 ## Running the binary directly
 
@@ -45,9 +45,10 @@ checkout and runs `attest verify`, failing the job on any policy violation:
 ```yaml
 jobs:
   trust:
-    runs-on: macos-latest   # composite action targets macOS
+    runs-on: macos-latest   # any runner with a Swift 6 toolchain works
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # range needs history
       - uses: CorvidLabs/attest@v0   # pin to the major tag, not @main
         with:
           range: origin/main..HEAD   # default

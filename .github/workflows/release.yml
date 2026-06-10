@@ -99,6 +99,6 @@ jobs:
           # alias to this release's commit so `@v0` always tracks the latest
           # v0.x.y release.
           MAJOR="${TAG%%.*}"   # v0.3.1 -> v0
-          git tag -f "$MAJOR" "$TAG"
+          git tag -f "$MAJOR" "$GITHUB_SHA"
           git push origin -f "refs/tags/$MAJOR"
-          echo "Moved $MAJOR -> $TAG"
+          echo "Moved $MAJOR -> $GITHUB_SHA (from $TAG)"
