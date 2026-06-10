@@ -1,4 +1,9 @@
 @preconcurrency import Foundation
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
+import Darwin
+#endif
 
 // MARK: - Git Notes Store
 
@@ -64,18 +69,12 @@ public struct NotesStore: AttestationStore {
 
     /// The raw note body for a commit, or `nil` if no note exists.
     private func noteBody(for commit: String) throws -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", path, "notes", "--ref=\(Self.ref)", "show", commit]
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        let result = try ProcessRunner.run(
+            ["git", "-C", path, "notes", "--ref=\(Self.ref)", "show", commit]
+        )
         // A missing note exits non-zero; treat that as "no attestations".
-        guard process.terminationStatus == 0 else { return nil }
-        return String(decoding: data, as: UTF8.self)
+        guard result.status == 0 else { return nil }
+        return result.output
     }
 
     /// Resolves a revision (e.g. `HEAD`, a tag, a short SHA) to a full SHA.
@@ -97,18 +96,74 @@ public struct NotesStore: AttestationStore {
 
     @discardableResult
     private func run(_ arguments: [String], allowFailure: Bool = false) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", path] + arguments
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice  // avoid pipe-buffer deadlock
-        try process.run()
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard allowFailure || process.terminationStatus == 0 else {
-            throw AttestError.git(command: arguments.joined(separator: " "), status: process.terminationStatus)
+        let result = try ProcessRunner.run(["git", "-C", path] + arguments)
+        guard allowFailure || result.status == 0 else {
+            throw AttestError.git(command: arguments.joined(separator: " "), status: result.status)
         }
-        return String(decoding: data, as: UTF8.self)
+        return result.output
+    }
+}
+
+// MARK: - Process Runner
+
+/// Spawns a child process via `posix_spawn` and reaps it with a synchronous
+/// `waitpid`, capturing stdout through a temporary file.
+///
+/// This deliberately avoids `Foundation.Process`. On Linux, `Foundation.Process`
+/// monitors child termination asynchronously and can miss a fast-exiting child
+/// (e.g. `git notes show`), leaving `waitUntilExit()` blocked forever; the
+/// failure surfaces most often when the tool is driven from within a test
+/// process. A synchronous `waitpid` reaps the child itself, so it cannot miss
+/// the exit, and the behaviour is identical on macOS and Linux.
+internal enum ProcessRunner {
+    internal struct Result: Sendable {
+        internal let status: Int32
+        internal let output: String
+    }
+
+    internal static func run(_ argv: [String]) throws -> Result {
+        let outputPath = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("attest-git-\(UUID().uuidString)")
+        FileManager.default.createFile(atPath: outputPath, contents: nil)
+        defer { try? FileManager.default.removeItem(atPath: outputPath) }
+
+        let executable = "/usr/bin/env"
+        let fullArgv = [executable] + argv
+
+        // `posix_spawn_file_actions_t` is a struct on Glibc but an opaque
+        // pointer on Darwin, so it must be declared differently per platform;
+        // both are allocated by `posix_spawn_file_actions_init`.
+        #if canImport(Darwin)
+        var fileActions: posix_spawn_file_actions_t?
+        #else
+        var fileActions = posix_spawn_file_actions_t()
+        #endif
+        posix_spawn_file_actions_init(&fileActions)
+        defer { posix_spawn_file_actions_destroy(&fileActions) }
+        posix_spawn_file_actions_addopen(&fileActions, 1, outputPath, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
+        posix_spawn_file_actions_addopen(&fileActions, 2, "/dev/null", O_WRONLY, 0)
+
+        let cArgs: [UnsafeMutablePointer<CChar>?] = fullArgv.map { strdup($0) } + [nil]
+        defer { for case let arg? in cArgs { free(arg) } }
+
+        // Pass the current environment (so `/usr/bin/env` finds git on PATH),
+        // built from ProcessInfo to stay clear of the `environ` global, which
+        // Swift does not expose uniformly across Darwin and Linux.
+        let cEnv: [UnsafeMutablePointer<CChar>?] =
+            ProcessInfo.processInfo.environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        defer { for case let entry? in cEnv { free(entry) } }
+
+        var pid: pid_t = 0
+        let spawnResult = posix_spawn(&pid, executable, &fileActions, nil, cArgs, cEnv)
+        guard spawnResult == 0 else {
+            throw AttestError.git(command: argv.joined(separator: " "), status: spawnResult)
+        }
+
+        var rawStatus: Int32 = 0
+        while waitpid(pid, &rawStatus, 0) == -1 && errno == EINTR { continue }
+        let status: Int32 = (rawStatus & 0x7f) == 0 ? (rawStatus >> 8) & 0xff : rawStatus & 0x7f
+
+        let data = (try? Data(contentsOf: URL(fileURLWithPath: outputPath))) ?? Data()
+        return Result(status: status, output: String(decoding: data, as: UTF8.self))
     }
 }

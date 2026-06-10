@@ -1,14 +1,12 @@
 # CI Integration
 
 `attest verify` is built to gate CI and agent loops: it exits non-zero when a commit lacks the
-trust a policy demands. This guide covers running it on the self-hosted macOS runners, the
-bundled `attest-verify` composite action, the augur → attest trust pipeline, and exporting an
-audit trail for compliance.
+trust a policy demands. This guide covers running it on macOS and Linux, the bundled
+`attest-verify` composite action, the augur to attest trust pipeline, and exporting an audit
+trail for compliance.
 
-> **Platform.** `attest` is **macOS-only for now**. The git-notes store, signing, and the
-> composite action all target macOS, and CI runs on the self-hosted **macOS ARM64** runners
-> (`runs-on: [self-hosted, macOS]`). Linux/Windows support is plausible (Foundation `Process` +
-> swift-crypto) but is not yet on the matrix.
+> **Platform.** `attest` supports **macOS and Linux**. The composite action currently targets
+> macOS. Windows is out of scope.
 
 ## Running the binary directly
 
@@ -17,7 +15,7 @@ The simplest integration is to build `attest` and run `verify` against your rang
 ```yaml
 jobs:
   trust:
-    runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,7 +41,7 @@ checkout and runs `attest verify`, failing the job on any policy violation:
 ```yaml
 jobs:
   trust:
-    runs-on: [self-hosted, macOS]   # macOS-only for now
+    runs-on: macos-latest   # composite action targets macOS
     steps:
       - uses: actions/checkout@v4
       - uses: CorvidLabs/attest@main

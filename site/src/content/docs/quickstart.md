@@ -12,8 +12,7 @@ optional policy file.
 ## Requirements
 
 - **Swift 6** and **`git`** on `PATH`.
-- **macOS**: attest is macOS-only for now (the git-notes store, signing, and CI all target
-  macOS). Linux/Windows support is plausible but not yet on the matrix.
+- **macOS and Linux**: attest supports macOS and Linux. Windows is out of scope.
 - Signing uses Apple's [`swift-crypto`](https://github.com/apple/swift-crypto); the CLI uses
   [`swift-argument-parser`](https://github.com/apple/swift-argument-parser).
 

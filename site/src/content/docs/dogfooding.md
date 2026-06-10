@@ -16,7 +16,8 @@ release binary against attest's real `HEAD`. Reproduce all of it with
 `examples/dogfood.sh`, which runs in a `/tmp` scratch clone (your working tree
 and notes ref are never touched).
 
-> **Platform.** macOS only, like the rest of attest.
+> **Platform.** macOS and Linux. The `examples/dogfood.sh` script and the CI
+> dogfood steps run on macOS.
 
 ## Why "attest attests attest" is the honest test
 
@@ -99,7 +100,7 @@ Those two `violations` lines are the real proof that the gate has teeth.
 
 ## The CI dogfood: a growing provenance ledger
 
-The CI workflow wires this into every run on the self-hosted macOS runner. After
+The CI workflow wires this into every run on the macOS runner. After
 `swift build`, `swift test`, and `fledge spec check` pass, it builds the release
 binary, records an unsigned `agent:ci` attestation on `$GITHUB_SHA`, runs
 `attest verify --policy .attest.json` as a **fatal** gate (printing the ledger
