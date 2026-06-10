@@ -7,6 +7,17 @@ import Pillar from '../components/Pillar.astro'
 import Callout from '../components/Callout.astro'
 import Terminal from '../components/Terminal.astro'
 import { base } from '../lib/path'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// Read the released version from the CHANGELOG at build time so the hero badge
+// never drifts behind a release (same source as the header).
+const changelog = fs.readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../CHANGELOG.md'),
+  'utf-8',
+)
+const VERSION = `v${changelog.match(/##\s*\[v?([0-9][^\]\s]*)\]/)?.[1] ?? '0.0.0'}`
 ---
 <BaseLayout title="attest: signed provenance for code changes">
 <main id="main">
@@ -15,7 +26,7 @@ import { base } from '../lib/path'
   <div class="container">
     <div class="hero-grid">
       <div>
-        <Badge dot>v0.1.0 · the trust layer for agent-written code</Badge>
+        <Badge dot>{VERSION} · the trust layer for agent-written code</Badge>
         <h1 class="hero-h1" id="hero-h">Record <span class="seal">who vetted</span><br>this change, and prove it.</h1>
         <p class="hero-sub">A verifiable, policy-gated ledger of who reviewed what and at what confidence, keyed to commit SHAs and stored in git notes. Optionally Ed25519-signed. <strong>augur scores the risk; attest records the trust.</strong></p>
         <div class="hero-actions">
