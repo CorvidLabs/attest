@@ -81,4 +81,10 @@ jobs:
           ARTIFACT: ${{ steps.build.outputs.artifact }}
         run: |
           set -euo pipefail
+          # Create the release if it does not exist yet (fledge pushes only the
+          # git tag, not a GitHub Release), then upload (clobbering any prior
+          # assets of the same name so re-runs are idempotent).
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
           gh release upload "$TAG" "$ARTIFACT" "$ARTIFACT.sha256" --clobber
