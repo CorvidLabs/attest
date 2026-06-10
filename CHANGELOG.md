@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.3.1] - 2026-06-10
+
+### Other
+
+- Add: Marketplace-ready GitHub Action that gates any repo (#26) — installs a
+  prebuilt attest (macOS universal / Linux x86_64) for the runner with a
+  source-build fallback, publishes the Linux release asset, and moves the `v0`
+  major tag on each release.
+
 ## [v0.3.0] - 2026-06-10
 
 ### Other
