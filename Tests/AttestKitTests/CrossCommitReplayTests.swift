@@ -17,9 +17,17 @@ import Darwin
 /// is not evidence for B. The test skips cleanly when the binary or `git` is unavailable.
 final class CrossCommitReplayTests: XCTestCase {
     private var productsDirectory: URL {
-        Bundle.allBundles.first { $0.bundlePath.hasSuffix(".xctest") }?
+        #if os(macOS)
+        return Bundle.allBundles.first { $0.bundlePath.hasSuffix(".xctest") }?
             .bundleURL.deletingLastPathComponent()
             ?? Bundle.main.bundleURL
+        #else
+        // On Linux the xctest runner executable lives in the same build
+        // directory as the `attest` product, and `Bundle` discovery is
+        // unreliable there, so derive the products dir from the runner's path.
+        let runner = CommandLine.arguments.first ?? ""
+        return URL(fileURLWithPath: runner).deletingLastPathComponent()
+        #endif
     }
 
     private var attestBinary: URL {
