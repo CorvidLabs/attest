@@ -33,18 +33,21 @@ Two details matter:
 - **Enough history.** A range like `origin/main..HEAD` needs the commits on both sides, so set
   `fetch-depth: 0` (or a depth large enough for the PR).
 
-## The `attest-verify` composite action
+## The `attest-verify` action
 
-The repository ships a composite GitHub Action (`action.yml`) that builds `attest` from its own
-checkout and runs `attest verify`, failing the job on any policy violation:
+The repository ships a GitHub Action (`action.yml`) you can drop into **any** repo. It installs a
+prebuilt `attest` for the runner (macOS universal or Linux x86_64) from the matching release, then
+runs `attest verify` against your checkout — no Swift toolchain required. On other platforms it
+falls back to building `attest` from its own source:
 
 ```yaml
 jobs:
   trust:
-    runs-on: macos-latest   # composite action targets macOS
+    runs-on: ubuntu-latest        # or macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: CorvidLabs/attest@main
+        with: { fetch-depth: 0 }   # range needs history
+      - uses: CorvidLabs/attest@v0   # pin to the major tag, not @main
         with:
           range: origin/main..HEAD   # default
           policy: .attest.json       # default
@@ -53,12 +56,14 @@ jobs:
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `range` | `origin/main..HEAD` | git range to verify. |
+| `range` | `origin/main..HEAD` | git range to verify (needs full history). |
 | `policy` | `.attest.json` | policy file path, relative to `working-directory`. |
 | `working-directory` | `.` | directory to run `attest verify` in. |
+| `version` | *(action ref)* | attest release to install (`v0.3.0` or `latest`); defaults to the pinned tag, else `latest`. |
 
-The action has **no outputs**; its contract is the **exit code**. A policy violation propagates
-`attest`'s non-zero exit and fails the job.
+The single output is `binary` (path to the `attest` used); the gate's contract is the **exit
+code**. A policy violation propagates `attest`'s non-zero exit and fails the job. Prebuilt binaries
+cover GitHub-hosted macOS and Linux x86_64 runners; other runners need a Swift toolchain.
 
 > **Honest scope.** The action builds `attest` from *its own* checkout with `swift build -c
 > release`. Cross-repo packaging (shipping a prebuilt binary and installing it into other repos
