@@ -87,8 +87,10 @@ jobs:
           # Create the release if it does not exist yet (fledge pushes only the
           # git tag, not a GitHub Release), then upload (clobbering any prior
           # assets of the same name so re-runs are idempotent).
+          # Idempotent create: skip if present, tolerate losing the race to the
+          # Linux upload job (which also creates the release).
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --generate-notes
+            gh release create "$TAG" --title "$TAG" --generate-notes || true
           fi
           gh release upload "$TAG" "$ARTIFACT" "$ARTIFACT.sha256" --clobber
 
@@ -157,19 +159,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # The macOS job creates the release; wait briefly for it if this job
-          # wins the race, then upload (clobbering for idempotent re-runs).
-          for _ in 1 2 3 4 5 6; do
-            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
-            echo "Release $TAG not ready yet; retrying..."
-            sleep 10
-          done
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --generate-notes
+          # This job has no checkout, so every gh call passes --repo explicitly;
+          # without it gh tries to read a git remote and fails ("not a git repo").
+          # The macOS job also creates the release, so create idempotently: skip
+          # if it already exists, and tolerate a create that loses the race.
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$REPO" --title "$TAG" --generate-notes || true
           fi
-          gh release upload "$TAG" \
+          gh release upload "$TAG" --repo "$REPO" \
             attest-linux-x86_64 \
             attest-linux-x86_64.sha256 \
             --clobber
