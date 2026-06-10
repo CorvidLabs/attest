@@ -316,10 +316,10 @@ violation:
 ```yaml
 jobs:
   trust:
-    runs-on: macos-latest   # composite action targets macOS
+    runs-on: macos-latest   # any runner with a Swift 6 toolchain works
     steps:
       - uses: actions/checkout@v4
-      - uses: CorvidLabs/attest@main
+      - uses: CorvidLabs/attest@v0   # pin to the major tag, not @main
         with:
           range: origin/main..HEAD   # default
           policy: .attest.json       # default
@@ -336,7 +336,8 @@ The action has no outputs; its contract is the **exit code**. A policy violation
 propagates `attest`'s non-zero exit and fails the job.
 
 > **Honest scope.** The action builds `attest` from *its own* checkout with
-> `swift build -c release` and currently targets macOS runners. Cross-repo
+> `swift build -c release`, so the runner must provide a Swift 6 toolchain
+> (`macos-latest` ships one; on Linux use a `swift:6.0` container). Cross-repo
 > packaging (shipping a prebuilt `attest` and installing it into other repos
 > without a Swift toolchain) is a deferred later step.
 

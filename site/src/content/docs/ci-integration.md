@@ -48,7 +48,7 @@ jobs:
     runs-on: macos-latest   # composite action targets macOS
     steps:
       - uses: actions/checkout@v4
-      - uses: CorvidLabs/attest@main
+      - uses: CorvidLabs/attest@v0   # pin to the major tag, not @main
         with:
           range: origin/main..HEAD   # default
           policy: .attest.json       # default

@@ -88,3 +88,17 @@ jobs:
             gh release create "$TAG" --title "$TAG" --generate-notes
           fi
           gh release upload "$TAG" "$ARTIFACT" "$ARTIFACT.sha256" --clobber
+
+      - name: Move major-version alias tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # GitHub Marketplace consumers should pin to a moving major tag
+          # (e.g. CorvidLabs/attest@v0) rather than @main. Force-update that
+          # alias to this release's commit so `@v0` always tracks the latest
+          # v0.x.y release.
+          MAJOR="${TAG%%.*}"   # v0.3.1 -> v0
+          git tag -f "$MAJOR" "$TAG"
+          git push origin -f "refs/tags/$MAJOR"
+          echo "Moved $MAJOR -> $TAG"

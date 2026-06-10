@@ -1,8 +1,13 @@
 name: "attest verify"
 description: >-
   Build attest from this checkout and gate a commit range against an
-  .attest.json policy, failing the job on any policy violation. macOS only.
+  .attest.json policy, failing the job on any policy violation. Runs on any
+  runner with a Swift 6 toolchain (macOS or a Linux swift container).
 author: "CorvidLabs"
+
+branding:
+  icon: "shield"
+  color: "purple"
 
 inputs:
   range:
