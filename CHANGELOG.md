@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.3.0] - 2026-06-10
+
+### Other
+
+- Release v0.3.0: bump CLI version (ecf1121)
+- Add: Linux support via posix_spawn ProcessRunner and Linux CI job (#25) (c0adfcb)
+- Add: animated demo GIF to README and site (#24) (545fdfe)
+- Security: move CI off self-hosted runners to GitHub-hosted (#23) (e640814)
+- Fix: read the hero badge version from CHANGELOG so it does not drift (#22) (298a5f4)
+- Add: release binary + brew formula automation, lead with brew, decouple Pages from self-hosted (#21) (f81dc1d)
+- Fix: rebuild the site on CHANGELOG changes so the version badge stays accurate (#20) (6e4ce27)
+
 ## [v0.2.0] - 2026-06-09
 
 ### Other
