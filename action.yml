@@ -1,8 +1,8 @@
 name: "attest verify"
 description: >-
-  Build attest from this checkout and gate a commit range against an
-  .attest.json policy, failing the job on any policy violation. Runs on any
-  runner with a Swift 6 toolchain (macOS or a Linux swift container).
+  Verify a commit range against an .attest.json policy, failing the job on any
+  violation. Signing optional, no API key. Installs a prebuilt attest binary for
+  the runner; builds from source only as a fallback.
 author: "CorvidLabs"
 
 branding:
@@ -11,7 +11,7 @@ branding:
 
 inputs:
   range:
-    description: "Git range to verify, e.g. 'origin/main..HEAD'."
+    description: "Git range to verify, e.g. 'origin/main..HEAD'. Requires full history (checkout with fetch-depth: 0)."
     required: false
     default: "origin/main..HEAD"
   policy:
@@ -22,19 +22,128 @@ inputs:
     description: "Directory to run attest in (the repository to verify)."
     required: false
     default: "."
+  version:
+    description: >-
+      attest release to install (e.g. v0.3.0), or "latest". Defaults to the ref
+      this action was pinned to when that is a release tag, otherwise "latest".
+    required: false
+    default: ""
+
+outputs:
+  binary:
+    description: "Absolute path to the attest binary used."
+    value: ${{ steps.install.outputs.binary }}
 
 runs:
   using: "composite"
   steps:
-    - name: Build attest (release)
+    - name: Install attest
+      id: install
       shell: bash
-      working-directory: ${{ github.action_path }}
-      run: swift build -c release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+        ACTION_REPO: ${{ github.action_repository }}
+      run: |
+        set -euo pipefail
+
+        repo="${ACTION_REPO:-CorvidLabs/attest}"
+
+        # Resolve which release to install. An explicit `version` wins; otherwise
+        # use the ref the action was pinned to when it looks like a version tag.
+        # `@v0.3.0` installs exactly v0.3.0; the moving `@v0` tag has no release of
+        # its own, so its download falls through to "latest" below. Anything else
+        # (branch/sha) installs latest.
+        ver="${INPUT_VERSION:-}"
+        if [ -z "$ver" ]; then
+          case "$ACTION_REF" in
+            v[0-9]*) ver="$ACTION_REF" ;;
+            *)       ver="latest" ;;
+          esac
+        fi
+
+        # Pick the release asset for this runner's OS/arch.
+        os="$(uname -s)"
+        arch="$(uname -m)"
+        case "$os" in
+          Darwin) asset="attest-macos-universal" ;;
+          Linux)
+            case "$arch" in
+              x86_64|amd64) asset="attest-linux-x86_64" ;;
+              *)            asset="" ;;
+            esac
+            ;;
+          *) asset="" ;;
+        esac
+
+        tmp="$(mktemp -d)"
+        bin=""
+
+        download() {
+          # download <tag-or-empty> -> 0 if the binary asset landed in $tmp
+          local tag="$1"
+          rm -f "$tmp/$asset" "$tmp/$asset.sha256"
+          if [ "$tag" = "latest" ] || [ -z "$tag" ]; then
+            gh release download --repo "$repo" \
+              --pattern "$asset" --pattern "$asset.sha256" \
+              --dir "$tmp" --clobber 2>/dev/null || return 1
+          else
+            gh release download "$tag" --repo "$repo" \
+              --pattern "$asset" --pattern "$asset.sha256" \
+              --dir "$tmp" --clobber 2>/dev/null || return 1
+          fi
+          [ -f "$tmp/$asset" ]
+        }
+
+        if [ -n "$asset" ]; then
+          # NOTE: a `@v<major>` pin with no matching release falls through to
+          # "latest", which crosses a major boundary once v(N+1) ships. Pin an
+          # exact tag (e.g. @v0.3.0) if you must never cross majors.
+          if download "$ver" || { [ "$ver" != "latest" ] && download "latest"; }; then
+            # Verify the checksum sidecar when present; a mismatch is fatal.
+            if [ -f "$tmp/$asset.sha256" ]; then
+              expected="$(cut -d' ' -f1 < "$tmp/$asset.sha256")"
+              if command -v sha256sum >/dev/null 2>&1; then
+                actual="$(sha256sum "$tmp/$asset" | cut -d' ' -f1)"
+              else
+                actual="$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)"
+              fi
+              if [ "$expected" != "$actual" ]; then
+                echo "::error::attest checksum mismatch for $asset (expected $expected, got $actual)."
+                exit 1
+              fi
+              echo "Verified $asset against published sha256."
+            else
+              echo "::warning::No sha256 sidecar published for $asset; skipping checksum verification."
+            fi
+            chmod +x "$tmp/$asset"
+            bin="$tmp/$asset"
+            echo "Installed attest ($asset, $ver) for $os/$arch."
+          fi
+        fi
+
+        # Fallback: build from the action's OWN checkout (never the consumer's
+        # tree) when no prebuilt binary fits this runner. Needs a Swift toolchain.
+        if [ -z "$bin" ]; then
+          if command -v swift >/dev/null 2>&1; then
+            echo "::warning::No prebuilt attest for $os/$arch; building from source. Use a supported runner (macOS or Linux x86_64) to skip this."
+            swift build -c release --package-path "$ACTION_PATH"
+            bin="$ACTION_PATH/.build/release/attest"
+          else
+            echo "::error::No prebuilt attest binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
+            exit 1
+          fi
+        fi
+
+        echo "binary=$bin" >> "$GITHUB_OUTPUT"
+
     - name: attest verify
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        ATTEST: ${{ github.action_path }}/.build/release/attest
+        ATTEST: ${{ steps.install.outputs.binary }}
         RANGE: ${{ inputs.range }}
         POLICY: ${{ inputs.policy }}
       run: |

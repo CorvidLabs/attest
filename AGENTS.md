@@ -31,7 +31,7 @@ trust-record companion to `augur`: augur scores diff risk, attest records the tr
 | `Tests/AttestKitTests/` | Engine tests via an in-memory `AttestationStore`. |
 | `specs/provenance-ledger/` | The spec spec-sync validates against the code. |
 | `examples/` | Runnable shell scripts against throwaway `/tmp` repos. |
-| `action.yml` | Composite GitHub Action ("attest verify") that builds attest from its own checkout and gates a range against `.attest.json`. |
+| `action.yml` | GitHub Action ("attest verify") that installs a prebuilt attest (macOS universal / Linux x86_64) for the runner — falling back to building from its own checkout — and gates a range against `.attest.json`. |
 | `.attest.json` | The committed default policy (permissive; demonstrates the schema). |
 
 ## CI / platform
@@ -45,8 +45,10 @@ CI runs two jobs:
 - **`build-test-linux`** (`runs-on: ubuntu-latest`, `container: swift:6.0`):
   `swift build` and `swift test` only. No brew, fledge, dogfood, or notes steps.
 
-The composite action in `action.yml` builds attest from its own checkout;
-cross-repo binary packaging is deferred.
+The action in `action.yml` installs a prebuilt attest matching the runner
+(`attest-macos-universal` / `attest-linux-x86_64`, published by `release.yml`),
+falling back to building from its own checkout when no prebuilt binary fits. So
+`release.yml` must keep publishing both assets + their sha256 sidecars.
 
 Do not add Windows runners or Windows-specific code.
 

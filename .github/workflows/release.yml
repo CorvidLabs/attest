@@ -1,17 +1,20 @@
 name: Release
 
-# Builds the macOS binary for a tagged release and uploads it (plus a .sha256
-# sidecar) to that release. attest is macOS-only, so there is a single artifact:
-# a universal (arm64 + x86_64) binary named `attest-macos-universal`.
+# Builds the release binaries for a tag and uploads each (plus a sha256 sidecar)
+# to the GitHub release:
+#   - attest-macos-universal   (arm64 + x86_64)  -> Homebrew formula + the action
+#   - attest-linux-x86_64                          -> the action on Ubuntu runners
+# The macOS sidecar is what post-release-formula.yml reads to bump the Homebrew
+# formula, so the macOS job must run and succeed before the formula can move. The
+# composite action (action.yml) downloads whichever asset matches the consumer's
+# runner, so both must exist for the Marketplace action to work without a Swift
+# toolchain.
 #
-# Runner note: this uses GitHub-hosted `macos-latest`, NOT the self-hosted
-# macOS runners the rest of CI uses. GitHub-hosted macOS images ship a Swift
-# toolchain, which is all we need, and keeping releases off the self-hosted box
-# means a tag push always produces a release without that machine being online.
-#
-# The `attest-macos-universal.sha256` sidecar is consumed by
-# post-release-formula.yml to bump the Homebrew formula. The release MUST upload
-# the sha sidecar for that downstream job to succeed.
+# Runner note: macOS uses GitHub-hosted `macos-latest`, NOT the self-hosted
+# runners the rest of CI uses. GitHub-hosted macOS images ship a Swift toolchain,
+# and keeping releases off the self-hosted box means a tag push always produces a
+# release without that machine being online. Linux builds inside the official
+# swift:6.0 container (Ubuntu runners have no Swift preinstalled).
 
 permissions:
   contents: write
@@ -89,16 +92,108 @@ jobs:
           fi
           gh release upload "$TAG" "$ARTIFACT" "$ARTIFACT.sha256" --clobber
 
-      - name: Move major-version alias tag
+  build-linux:
+    name: Build Linux x86_64 binary
+    runs-on: ubuntu-latest
+    # The bare swift:6.0 image has no `gh`, so this job only BUILDS and hands the
+    # artifacts off; upload-linux (on the host runner, which has gh) publishes them.
+    container: swift:6.0
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build release binary + sha256 sidecar
+        run: |
+          set -euo pipefail
+          swift build -c release
+          cp "$(swift build -c release --show-bin-path)/attest" attest-linux-x86_64
+          file attest-linux-x86_64
+          sha256sum attest-linux-x86_64 | cut -d' ' -f1 > attest-linux-x86_64.sha256
+          cat attest-linux-x86_64.sha256
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: attest-linux-x86_64
+          path: |
+            attest-linux-x86_64
+            attest-linux-x86_64.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  upload-linux:
+    name: Publish Linux binary to release
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: attest-linux-x86_64
+
+      - name: Resolve tag
+        id: tag
         env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Reject branch names so a manual run never uploads to a bogus release.
+          if ! [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Expected a semver tag like v0.2.0, got '$REF_NAME'. Run this from a tag."
+            exit 1
+          fi
+          echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binary + sidecar to release
+        env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
-          # GitHub Marketplace consumers should pin to a moving major tag
-          # (e.g. CorvidLabs/attest@v0) rather than @main. Force-update that
-          # alias to this release's commit so `@v0` always tracks the latest
-          # v0.x.y release.
-          MAJOR="${TAG%%.*}"   # v0.3.1 -> v0
-          git tag -f "$MAJOR" "$GITHUB_SHA"
-          git push origin -f "refs/tags/$MAJOR"
-          echo "Moved $MAJOR -> $GITHUB_SHA (from $TAG)"
+          # The macOS job creates the release; wait briefly for it if this job
+          # wins the race, then upload (clobbering for idempotent re-runs).
+          for _ in 1 2 3 4 5 6; do
+            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
+            echo "Release $TAG not ready yet; retrying..."
+            sleep 10
+          done
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" \
+            attest-linux-x86_64 \
+            attest-linux-x86_64.sha256 \
+            --clobber
+
+  move-major-tag:
+    name: Move the major (v0) tag
+    runs-on: ubuntu-latest
+    # Only after both binaries are published, so `@v0` never points at a commit
+    # whose release lacks assets. Force-updates the major tag (v0 for v0.x.y) to
+    # this release's commit, so consumers can pin `uses: CorvidLabs/attest@v0`
+    # and track the latest 0.x without editing their workflow.
+    needs: [build, upload-linux]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Force-update the major tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Derive the major tag from the release tag: v0.3.0 -> v0, v1.2.3 -> v1.
+          major="${REF_NAME%%.*}"
+          case "$major" in
+            v[0-9]*) ;;
+            *) echo "::error::Unexpected tag '$REF_NAME'; cannot derive a major tag."; exit 1 ;;
+          esac
+          echo "Pointing $major at $GITHUB_SHA (from $REF_NAME)."
+          git tag -f "$major" "$GITHUB_SHA"
+          git push origin -f "refs/tags/$major"
