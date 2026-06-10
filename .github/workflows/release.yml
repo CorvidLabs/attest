@@ -1,0 +1,84 @@
+name: Release
+
+# Builds the macOS binary for a tagged release and uploads it (plus a .sha256
+# sidecar) to that release. attest is macOS-only, so there is a single artifact:
+# a universal (arm64 + x86_64) binary named `attest-macos-universal`.
+#
+# Runner note: this uses GitHub-hosted `macos-latest`, NOT the self-hosted
+# macOS runners the rest of CI uses. GitHub-hosted macOS images ship a Swift
+# toolchain, which is all we need, and keeping releases off the self-hosted box
+# means a tag push always produces a release without that machine being online.
+#
+# The `attest-macos-universal.sha256` sidecar is consumed by
+# post-release-formula.yml to bump the Homebrew formula. The release MUST upload
+# the sha sidecar for that downstream job to succeed.
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and upload macOS binary
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # On a tag push, github.ref_name is the tag. On workflow_dispatch from
+          # a tag it is also the tag; from a branch it is the branch name, which
+          # we reject so a manual run never uploads to a bogus "release".
+          if ! [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Expected a semver tag like v0.2.0, got '$REF_NAME'. Run this from a tag."
+            exit 1
+          fi
+          echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build universal release binary
+        id: build
+        run: |
+          set -uo pipefail
+          ARTIFACT="attest-macos-universal"
+          # Preferred: a single universal binary covering both Apple Silicon and
+          # Intel. If the x86_64 slice fails to cross-build on the runner, fall
+          # back to an arm64-only binary under the SAME artifact name so the
+          # release shape (and the formula) stays stable. The fallback is
+          # documented and surfaced in the job log.
+          if swift build -c release --arch arm64 --arch x86_64; then
+            echo "Built universal (arm64 + x86_64) binary."
+            cp ".build/apple/Products/Release/attest" "$ARTIFACT"
+          else
+            echo "::warning::Universal build failed; falling back to arm64-only binary named $ARTIFACT."
+            swift build -c release --arch arm64
+            cp ".build/apple/Products/Release/attest" "$ARTIFACT"
+          fi
+          file "$ARTIFACT"
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+
+      - name: Write sha256 sidecar
+        env:
+          ARTIFACT: ${{ steps.build.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          shasum -a 256 "$ARTIFACT" | cut -d' ' -f1 > "$ARTIFACT.sha256"
+          echo "$ARTIFACT.sha256:"
+          cat "$ARTIFACT.sha256"
+
+      - name: Upload binary and sidecar to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          ARTIFACT: ${{ steps.build.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" "$ARTIFACT" "$ARTIFACT.sha256" --clobber

@@ -1,0 +1,108 @@
+name: Post-Release Formula Update
+
+# Runs after the Release workflow finishes uploading the binary + its .sha256
+# sidecar. Pulls the real sha, rewrites the formula in CorvidLabs/homebrew-tap
+# with the new version + sha. This is the only correct moment to bump the
+# formula: at release time the new version's binary does not exist yet, so any
+# pre-build sha would be a lie.
+#
+# attest ships a single macOS universal binary, so unlike the fledge formula
+# (three shas) this rewrites exactly ONE sha256 line.
+#
+# Security note: every value derived from `github.event.workflow_run.*` (or any
+# other potentially attacker-controlled context) flows through an `env:` block
+# before reaching a shell. Direct `${{ ... }}` interpolation inside `run: |` is
+# a code-injection sink and is intentionally avoided here.
+
+permissions:
+  contents: read
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+jobs:
+  update-formula:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$HEAD_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Refusing to run with non-semver tag '$HEAD_BRANCH'"
+            exit 1
+          fi
+          {
+            echo "tag=$HEAD_BRANCH"
+            echo "version=${HEAD_BRANCH#v}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fetch sha256 sidecar from release
+        id: sha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha="$(gh release download "$TAG" -p "attest-macos-universal.sha256" -R "$REPO" -O - | awk '{print $1}')"
+          if ! [[ "$sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::Invalid sha256 from sidecar: '$sha'"
+            exit 1
+          fi
+          echo "macos_universal=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Sync formula to homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.tag.outputs.version }}
+          MACOS_UNIVERSAL: ${{ steps.sha.outputs.macos_universal }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::TAP_GITHUB_TOKEN secret is required"
+            exit 1
+          fi
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/CorvidLabs/homebrew-tap.git" /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+
+          # Rewrite the formula in-place: one version line, one sha256 line.
+          python3 - <<'PY'
+          import os, re, sys, pathlib
+          p = pathlib.Path("Formula/attest.rb")
+          src = p.read_text()
+          src, n_version = re.subn(
+              r'(?m)^(\s*version\s+")(\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?)(")',
+              rf'\g<1>{os.environ["NEW_VERSION"]}\g<4>',
+              src,
+              count=1,
+          )
+          if n_version != 1:
+              sys.exit(f"Expected exactly 1 version line in Formula/attest.rb, found {n_version}")
+          parts = re.split(r'(sha256\s+"[0-9a-fA-F]{64}")', src)
+          if len(parts) - 1 != 2:
+              sys.exit(
+                  f"Expected 1 sha256 line in Formula/attest.rb, found {(len(parts) - 1) // 2}"
+              )
+          parts[1] = f'sha256 "{os.environ["MACOS_UNIVERSAL"]}"'
+          p.write_text("".join(parts))
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- Formula/attest.rb; then
+            echo "homebrew-tap Formula/attest.rb already at v$NEW_VERSION; nothing to do."
+            exit 0
+          fi
+          git add Formula/attest.rb
+          git commit -m "chore: update attest formula to v$NEW_VERSION"
+          git push origin main

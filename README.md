@@ -7,7 +7,7 @@
 [![docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Fattest-blue)](https://corvidlabs.github.io/attest/)
 
 ```sh
-swift build -c release && install -m 0755 .build/release/attest /usr/local/bin/attest
+brew install corvidlabs/tap/attest
 ```
 
 `attest` records signed attestations (who or what reviewed a change, and at what confidence)
@@ -21,7 +21,13 @@ gate on. **augur scores the risk; attest records the trust.**
 
 ## Quickstart
 
-**Install** (macOS, Swift 6, `git` on `PATH`):
+**Install** (macOS). The fastest path is Homebrew:
+
+```sh
+brew install corvidlabs/tap/attest
+```
+
+Prefer to build from source? You need Swift 6 and `git` on `PATH`:
 
 ```sh
 swift build -c release && install -m 0755 .build/release/attest /usr/local/bin/attest
@@ -104,6 +110,14 @@ context is lost the moment the PR merges. `attest` is that missing primitive:
 
 ## Install
 
+The recommended install is Homebrew, which pulls a prebuilt macOS universal binary:
+
+```sh
+brew install corvidlabs/tap/attest
+```
+
+From source (Swift 6 and `git` on `PATH`):
+
 ```sh
 swift build -c release
 install -m 0755 .build/release/attest /usr/local/bin/attest
@@ -111,7 +125,17 @@ install -m 0755 .build/release/attest /usr/local/bin/attest
 fledge run install
 ```
 
-Requires Swift 6 and `git` on `PATH`. Signing uses [swift-crypto](https://github.com/apple/swift-crypto).
+Other options:
+
+```sh
+# Mint:
+mint install CorvidLabs/attest
+
+# SwiftPM experimental install (drops attest into ~/.swiftpm/bin):
+swift package experimental-install
+```
+
+Signing uses [swift-crypto](https://github.com/apple/swift-crypto).
 
 ## Usage
 
