@@ -118,10 +118,18 @@ jobs:
       - name: Build release binary + sha256 sidecar
         run: |
           set -euo pipefail
-          swift build -c release
-          cp "$(swift build -c release --show-bin-path)/attest" attest-linux-x86_64
+          # --static-swift-stdlib bundles the Swift runtime into the binary.
+          # Without it the binary dynamically links libswiftCore.so etc., which a
+          # bare ubuntu-latest runner (no Swift toolchain) lacks -- so the action's
+          # whole "no toolchain needed" promise fails with a missing-.so error.
+          swift build -c release --static-swift-stdlib
+          cp "$(swift build -c release --static-swift-stdlib --show-bin-path)/attest" attest-linux-x86_64
           # NOTE: no `file` here — the swift:6.0 image doesn't ship it. Use ls -l.
           ls -l attest-linux-x86_64
+          # ldd is best-effort: confirm no Swift runtime .so remains dynamically
+          # linked (a quick guard against silently shipping a broken binary).
+          ldd attest-linux-x86_64 2>/dev/null | grep -i swift && \
+            { echo "::error::binary still dynamically links the Swift runtime"; exit 1; } || true
           sha256sum attest-linux-x86_64 | cut -d' ' -f1 > attest-linux-x86_64.sha256
           cat attest-linux-x86_64.sha256
 
