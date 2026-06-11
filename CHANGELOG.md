@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.3.2] - 2026-06-10
+
+### Other
+
+- Fix: statically link the Swift stdlib in the Linux release binary
+  (`--static-swift-stdlib`) so `attest-linux-x86_64` runs on a bare runner with
+  no Swift toolchain. The v0.3.1 Linux asset failed at runtime with a missing
+  `libswiftCore.so`. Caught by a new CI smoke-test of the action itself.
+
 ## [v0.3.1] - 2026-06-10
 
 ### Other
