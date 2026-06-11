@@ -150,9 +150,17 @@ jobs:
     # checksum → verify. The other jobs invoke attest via .build/release
     # directly, so action.yml's own wiring (binary install, sha verification,
     # injection-safe env handling, version resolution) had no CI coverage.
-    # macOS is used so the source-build fallback works regardless of
-    # release-asset timing; a policy violation can't fail the wiring check.
-    runs-on: macos-latest
+    #
+    # Run on BOTH hosted runners: macOS exercises the universal asset (and the
+    # source-build fallback), while ubuntu-latest exercises the prebuilt Linux
+    # download path -- the one that shipped a dynamically-linked binary failing
+    # at runtime with a missing libswiftCore.so. A macOS-only smoke can't catch
+    # that. A policy violation can't fail this wiring check.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
