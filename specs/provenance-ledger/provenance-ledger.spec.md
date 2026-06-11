@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 8
+version: 9
 status: draft
 files:
   - Sources/AttestKit/Models.swift
@@ -75,6 +75,7 @@ Two design commitments make it usable everywhere:
 | `KeyStore.init(keyPath:)` / `defaultPath()` | Locate the on-disk key (`~/.config/attest/key`). |
 | `KeyStore.generate(force:)` | Write a new `0600` private key and return its signer. |
 | `KeyStore.load()` | Load the signer from disk; throws `keyNotFound` when absent. |
+| `KeyStore.loosePermissions` | The key file's POSIX permission bits when they allow group/other access, or `nil` when the file is absent or owner-only; the CLI warns on stderr before signing with a loose key. |
 
 ### Storage
 
@@ -83,10 +84,13 @@ Two design commitments make it usable everywhere:
 | `AttestationStore` | Protocol: `append(_:)`, `attestations(for:)`, `attestedCommits()`. |
 | `NotesStore.init(path:)` | An `AttestationStore` backed by git notes under `refs/notes/attest`. |
 | `NotesStore.validate()` | Confirm `path` is inside a git work tree. |
-| `NotesStore.resolve(revision:)` | Resolve a revision (e.g. `HEAD`) to a full SHA. |
+| `NotesStore.resolve(revision:)` | Resolve a revision (e.g. `HEAD`) to a full SHA; throws `unknownRevision` (not raw git plumbing) when it does not name a commit. |
 | `NotesStore.commits(inRange:)` | The commit SHAs in a range, oldest first. |
+| `NotesStore.attestedCommits()` | Every attested commit in history order, newest first (`rev-list --no-walk=sorted`), not SHA order. |
+| `NotesStore.lenientAttestations(for:)` | A commit's readable attestations plus a count of malformed note lines, so one corrupt line cannot hide the valid records beside it. |
 | `InMemoryStore` | A thread-safe in-memory `AttestationStore` for tests and dry runs. |
-| `AttestationCodec.encodeLine(_:)` / `decodeLines(_:)` | JSON-Lines encode/decode for a note body. |
+| `AttestationCodec.encodeLine(_:)` / `decodeLines(_:)` | JSON-Lines encode/decode for a note body; `decodeLines` throws on any malformed line. |
+| `AttestationCodec.decodeLinesLeniently(_:)` | JSON-Lines decode that collects valid records and counts malformed lines instead of throwing. |
 
 ### Policy & Augur
 
@@ -100,7 +104,7 @@ Two design commitments make it usable everywhere:
 | `Policy.signerPinning` | When set (non-empty), any attestation whose `reviewer` is a key in this `[reviewer: base64 pubkey]` map must be signed with the pinned key and verify; a pinned reviewer signed with a different key or left unsigned fails. Stops reviewer spoofing. |
 | `Policy.maxAgeDays` | When set, the commit must carry at least one attestation whose `timestamp` is within `maxAgeDays` whole days of an injected reference time (`now`); a commit whose newest attestation is older, or which has none, fails. `nil` disables the rule. |
 | `Policy.default` | The default policy: require an attestation, nothing more. |
-| `Policy.load(fromFile:)` | Load a policy from a `.attest.json` file. |
+| `Policy.load(fromFile:)` | Load a policy from a `.attest.json` file, strictly: a missing file throws `policyNotFound`, an unknown (misspelled) rule name throws `unknownPolicyKeys` naming the offenders and listing the valid keys, and any other decode problem is rendered as a human-readable `malformedPolicy` (file, problem, key path / position) instead of a raw `DecodingError`. |
 | `Verifier.init(policy:)` / `verify(commits:now:)` | Evaluate a policy over commits' attestations; `now` (Unix epoch seconds, defaulting to the current epoch) is the injected clock for the `maxAgeDays` freshness rule. |
 | `AugurVerdict.parse(_:)` | Parse `augur check --json`, mapping `riskScore` to `confidence = 1 - riskScore/100`. |
 | `Reporter.renderLog(_:colorizer:)` / `renderVerification(_:colorizer:)` | Human-readable terminal rendering. `colorizer` defaults to `.plain` (byte-identical, unstyled output); pass an enabled `Colorizer` for semantic ANSI colour. |
@@ -205,6 +209,19 @@ Two design commitments make it usable everywhere:
   A `nil` value disables the rule.
 - `Policy` decodes from JSON with permissive defaults: an empty `{}` policy still requires
   an attestation and passes any commit that has one.
+- `Policy` decoding is **strict about key names**: every key present in the JSON must be a
+  known rule, and an unknown (misspelled) key throws `AttestError.unknownPolicyKeys` naming
+  the offending key(s), sorted, and listing the valid rule names — a misspelled rule is a
+  rule that is off, so it must never be silently ignored. Permissive defaults apply only to
+  *absent* keys, never to unrecognized ones.
+- `NotesStore.attestedCommits()` returns commits in history order, newest first: the
+  SHA-ordered `git notes list` output is re-ordered with `git rev-list --no-walk=sorted`
+  (reverse chronological by commit time, no ancestry walk, so attested commits on any branch
+  are covered), falling back to the unsorted listing only if rev-list cannot cover them all.
+- A failing git invocation surfaces git's own stderr explanation: `AttestError.git` carries
+  the first line of stderr (with the `fatal:`/`error:` prefix stripped) in its `message`,
+  and `NotesStore.resolve(revision:)` maps an unresolvable revision to
+  `AttestError.unknownRevision(revision)` rather than leaking `rev-parse` plumbing.
 - `AugurVerdict.parse` maps `riskScore` (0...100) to `confidence = 1 - riskScore/100`,
   clamped to `0...1`.
 - `KeyStore.generate` writes the private key with `0600` permissions.
@@ -279,6 +296,31 @@ Two design commitments make it usable everywhere:
   unsigned record exports `"verification": { "signed": false }` (no `verified`).
 - `attest export --range A..B --policy .attest.json` adds a per-commit `policyPassed` and a
   top-level `allPassed`, computed with the same `Verifier` as `attest verify`.
+- `attest verify --commit HEAD --policy /tmp/nope.json` (an explicitly passed `--policy` path
+  that does not exist) exits non-zero with `Policy file not found: /tmp/nope.json` — it never
+  silently falls back to the permissive default, so a typo'd policy path in CI cannot drop the
+  policy's rules. Only the *implicit* lookup of `.attest.json` (no `--policy` flag) may fall
+  back to `Policy.default` when the file is absent.
+- A policy containing `{"minimumConfidenceTYPO": 0.9}` fails to load with
+  `Unknown policy key(s): minimumConfidenceTYPO. Valid keys are: …`, and a file containing
+  `{not json` fails with `Malformed policy <file>: not valid JSON (…)` — never a raw
+  `DecodingError` dump.
+- `attest sign --confidence 1.5` is rejected at the CLI boundary (exit 64,
+  `confidence must be in 0...1 (got 1.5)`) instead of being silently clamped to `1.0`;
+  the library's constructor clamp remains as a safety net. Negative values use the
+  `--confidence=-0.3` form (an argument-parser quirk) and are rejected the same way.
+- A bare `attest log` (no `--range`/`--commit`) lists attested commits newest-first in
+  history order, matching the `--range` path, rather than SHA-alphabetical order. `attest
+  export` without a range covers every attested commit oldest-first, matching its range
+  convention.
+- `attest log` over a note with one corrupt line still prints the valid records stored in
+  the same note, warns `skipped N malformed record line(s)` on stderr, and exits non-zero —
+  loud, not lossy, and one bad line never hides good records.
+- `attest verify --commit deadbeef123` reports `Unknown revision: deadbeef123`, and a bad
+  `--range` surfaces git's own stderr (e.g. `… unknown revision or path not in the working
+  tree.`) instead of a bare `git rev-parse … failed (exit 128)`.
+- `attest sign --sign` with a key file whose permissions allow group/other access warns on
+  stderr (`has permissions 0644 (expected 0600)`) before signing; signing still proceeds.
 - A signed attestation for commit A copied verbatim onto commit B's note (a cross-commit replay)
   no longer passes B's policy: `attest verify --commit B` with a strict policy
   (`requireSignature` + `trustedKeys` + `minimumConfidence`) exits non-zero, because the verifier
@@ -289,8 +331,18 @@ Two design commitments make it usable everywhere:
 ## Error Cases
 
 - `AttestError.notARepository(path)` — `NotesStore.validate()` finds no git work tree.
-- `AttestError.git(command:status:)` — an underlying `git` invocation exits non-zero.
+- `AttestError.git(command:status:message:)` — an underlying `git` invocation exits non-zero;
+  `message` carries the first line of git's stderr (prefix-stripped) so the user sees git's
+  own explanation.
+- `AttestError.unknownRevision(revision)` — `NotesStore.resolve(revision:)` could not resolve
+  the revision to a commit.
 - `AttestError.malformedRecord(detail)` — a stored note line is not valid attestation JSON.
+- `AttestError.policyNotFound(path)` — `Policy.load(fromFile:)` over a path that does not exist
+  (e.g. an explicitly passed `--policy` that was typo'd).
+- `AttestError.malformedPolicy(file:detail:)` — a policy file is not valid policy JSON; `detail`
+  is human-readable (position or key path), never a raw `DecodingError`.
+- `AttestError.unknownPolicyKeys(keys:validKeys:)` — a policy contains unknown (misspelled) rule
+  names; both the offenders and the valid rule names are carried for the message.
 - `AttestError.keyNotFound(path)` — signing requested but no key exists.
 - `AttestError.keyAlreadyExists(path)` — `keygen` without `--force` over an existing key.
 - `AttestError.invalidKey(detail)` — a base64 key is malformed or not a valid Ed25519 key.
@@ -377,3 +429,18 @@ Two design commitments make it usable everywhere:
   `commitMatches: false` and never `verified: true`. `attest log` renders a relocated record as
   `commit-mismatch` (not `signed[ok]`), warns on stderr, and exits non-zero. Source-compatible and
   additive: existing `VerificationStatus.evaluate(_:)` and all other APIs are unchanged.
+- v9: Fail-loud input handling across the policy, CLI, and git boundaries (no change to canonical
+  serialization, signatures, or storage). Policy loading is strict: `Policy.load(fromFile:)` throws
+  `policyNotFound` for a missing file (so an explicitly passed `--policy` path that does not exist
+  is a hard verify error instead of a silent fall-back to the permissive default — only the
+  implicit `.attest.json` lookup may fall back), unknown (misspelled) rule names throw
+  `unknownPolicyKeys` naming the offenders and listing the valid keys, and other decode failures
+  are rendered as a human-readable `malformedPolicy` instead of a raw `DecodingError`. The CLI
+  rejects out-of-range `--confidence` (exit 64) rather than silently clamping. `attest log` without
+  a range lists commits newest-first in history order (`NotesStore.attestedCommits()` re-orders the
+  SHA-ordered notes listing via `rev-list --no-walk=sorted`; bare `export` is oldest-first), and a
+  corrupt note line no longer hides the valid records beside it (`decodeLinesLeniently` /
+  `NotesStore.lenientAttestations(for:)`; stderr warning + non-zero exit preserved). Git failures
+  carry git's stderr explanation (`AttestError.git` gains a `message`; `resolve` throws the new
+  `unknownRevision`), and `attest sign --sign` warns when the key file's permissions are looser
+  than `0600` (`KeyStore.loosePermissions`).

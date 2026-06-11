@@ -109,9 +109,13 @@ public struct Attestation: Sendable, Codable, Equatable {
 
 public enum AttestError: Error, LocalizedError, Sendable, Equatable {
     case notARepository(String)
-    case git(command: String, status: Int32)
+    case git(command: String, status: Int32, message: String)
+    case unknownRevision(String)
     case noAttestations(commit: String)
     case malformedRecord(String)
+    case policyNotFound(String)
+    case malformedPolicy(file: String, detail: String)
+    case unknownPolicyKeys(keys: [String], validKeys: [String])
     case keyNotFound(String)
     case keyAlreadyExists(String)
     case invalidKey(String)
@@ -123,12 +127,22 @@ public enum AttestError: Error, LocalizedError, Sendable, Equatable {
         switch self {
         case .notARepository(let path):
             return "Not a git repository: \(path)"
-        case .git(let command, let status):
-            return "git \(command) failed (exit \(status))"
+        case .git(let command, let status, let message):
+            let suffix = message.isEmpty ? "" : ": \(message)"
+            return "git \(command) failed (exit \(status))\(suffix)"
+        case .unknownRevision(let revision):
+            return "Unknown revision: \(revision)"
         case .noAttestations(let commit):
             return "No attestations found for \(commit)."
         case .malformedRecord(let detail):
             return "Malformed attestation record: \(detail)"
+        case .policyNotFound(let path):
+            return "Policy file not found: \(path)"
+        case .malformedPolicy(let file, let detail):
+            return "Malformed policy \(file): \(detail)"
+        case .unknownPolicyKeys(let keys, let validKeys):
+            return "Unknown policy key(s): \(keys.joined(separator: ", ")). "
+                + "Valid keys are: \(validKeys.joined(separator: ", "))."
         case .keyNotFound(let path):
             return "No signing key at \(path). Run `attest keygen` first."
         case .keyAlreadyExists(let path):

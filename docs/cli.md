@@ -31,7 +31,7 @@ Record an attestation for a commit, written to git notes (`refs/notes/attest`).
 |------|---------|-------------|
 | `--commit <rev>` | `HEAD` | the commit to attest (SHA or revision). |
 | `--reviewer <id>` | *(required)* | who or what reviewed, e.g. `agent:claude`, `human:leif`. |
-| `--confidence <0..1>` | none | reviewer confidence; clamped to `0...1`. |
+| `--confidence <0..1>` | none | reviewer confidence in `0...1`; out-of-range values are rejected (exit `64`). Use `--confidence=VALUE` for negative values. |
 | `--verdict <v>` | none | recorded verdict: `proceed`, `review`, or `block`. |
 | `--tests-passed` | off | record that the change's tests passed. |
 | `--human-approved` | off | record that a human approved (implies confidence `1.0` if none given). |
@@ -70,7 +70,7 @@ Exit non-zero if any commit in a range violates the policy. This is the gate for
 |------|---------|-------------|
 | `--range <a..b>` | none | a git range to check, e.g. `origin/main..HEAD`. |
 | `--commit <rev>` | none | check a single commit; defaults to `HEAD` when neither `--range` nor `--commit` is given. |
-| `--policy <path>` | `.attest.json` | path to the policy file (falls back to the permissive default if absent). |
+| `--policy <path>` | none | path to the policy file. An explicitly passed path **must exist** — a typo'd path is a hard error, never a silent fall-back. Without the flag, `.attest.json` is used when present, else the permissive default. |
 | `--json` | off | emit machine-readable JSON instead of the human report. |
 | `--color <auto\|always\|never>` | `auto` | colorize the human report. `auto` colours only when stdout is a TTY and `NO_COLOR` is unset; `--json` and piped output stay plain. |
 
@@ -102,7 +102,9 @@ List recorded attestations, human-readable or JSON. This is the **default** subc
 | `--json` | off | emit machine-readable JSON. |
 | `--color <auto\|always\|never>` | `auto` | colorize the listing. `auto` colours only when stdout is a TTY and `NO_COLOR` is unset; `--json` and piped output stay plain. |
 
-With neither `--range` nor `--commit`, `log` lists every attested commit.
+With neither `--range` nor `--commit`, `log` lists every attested commit in history order
+(newest first). A corrupt note line is skipped with a stderr warning and a non-zero exit,
+while the valid records around it still print.
 
 ```sh
 attest log                        # all attested commits
@@ -123,7 +125,7 @@ compliance archival. Always JSON (no `--json` flag).
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--range <a..b>` | none | a git range to export. |
-| `--commit <rev>` | none | export a single commit; with neither, exports every attested commit. |
+| `--commit <rev>` | none | export a single commit; with neither, exports every attested commit (oldest first). |
 | `--policy <path>` | none | optional; when set, each commit's pass/fail is included. |
 | `--pretty` / `--no-pretty` | `--pretty` | pretty-print (default) or emit compact JSON. |
 

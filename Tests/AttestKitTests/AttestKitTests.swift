@@ -1004,6 +1004,155 @@ final class AttestKitTests: XCTestCase {
         XCTAssertEqual(policy, .default)
     }
 
+    // MARK: - Policy: strict decoding
+
+    func testPolicyRejectsUnknownKeys() {
+        // A misspelled rule is a rule that is off; it must be a hard error, not
+        // a silently ignored key.
+        let json = Data("{\"minimumConfidenceTYPO\": 0.9}".utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(Policy.self, from: json)) { error in
+            guard case AttestError.unknownPolicyKeys(let keys, let validKeys) = error else {
+                return XCTFail("expected unknownPolicyKeys, got \(error)")
+            }
+            XCTAssertEqual(keys, ["minimumConfidenceTYPO"])
+            XCTAssertTrue(validKeys.contains("minimumConfidence"))
+            let description = (error as? AttestError)?.errorDescription ?? ""
+            XCTAssertTrue(description.contains("minimumConfidenceTYPO"))
+            XCTAssertTrue(description.contains("minimumConfidence,"))
+        }
+    }
+
+    func testPolicyRejectsMultipleUnknownKeysSorted() {
+        let json = Data("{\"zzz\": 1, \"aaa\": 2, \"requireSignature\": true}".utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(Policy.self, from: json)) { error in
+            guard case AttestError.unknownPolicyKeys(let keys, _) = error else {
+                return XCTFail("expected unknownPolicyKeys, got \(error)")
+            }
+            XCTAssertEqual(keys, ["aaa", "zzz"])
+        }
+    }
+
+    // MARK: - Policy: loading errors
+
+    private func writeTemporaryPolicy(_ contents: String) throws -> String {
+        let path = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("attest-policy-\(UUID().uuidString).json")
+        try contents.write(toFile: path, atomically: true, encoding: .utf8)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(atPath: path)
+        }
+        return path
+    }
+
+    func testPolicyLoadMissingFileThrowsPolicyNotFound() {
+        let path = "/tmp/attest-no-such-policy-\(UUID().uuidString).json"
+        XCTAssertThrowsError(try Policy.load(fromFile: path)) { error in
+            XCTAssertEqual(error as? AttestError, .policyNotFound(path))
+            let description = (error as? AttestError)?.errorDescription ?? ""
+            XCTAssertEqual(description, "Policy file not found: \(path)")
+        }
+    }
+
+    func testPolicyLoadMalformedJSONThrowsHumanReadableError() throws {
+        let path = try writeTemporaryPolicy("{not json")
+        XCTAssertThrowsError(try Policy.load(fromFile: path)) { error in
+            guard case AttestError.malformedPolicy(let file, _) = error else {
+                return XCTFail("expected malformedPolicy, got \(error)")
+            }
+            XCTAssertEqual(file, path)
+            let description = (error as? AttestError)?.errorDescription ?? ""
+            // Human message: file plus problem, no raw Swift error internals.
+            XCTAssertTrue(description.hasPrefix("Malformed policy \(path):"))
+            XCTAssertFalse(description.contains("dataCorrupted"))
+            XCTAssertFalse(description.contains("DecodingError"))
+            XCTAssertFalse(description.contains("NSCocoaErrorDomain"))
+        }
+    }
+
+    func testPolicyLoadTypeMismatchNamesTheKey() throws {
+        let path = try writeTemporaryPolicy("{\"minimumConfidence\": \"high\"}")
+        XCTAssertThrowsError(try Policy.load(fromFile: path)) { error in
+            guard case AttestError.malformedPolicy(_, let detail) = error else {
+                return XCTFail("expected malformedPolicy, got \(error)")
+            }
+            XCTAssertTrue(detail.contains("minimumConfidence"), "detail should name the key, got: \(detail)")
+        }
+    }
+
+    func testPolicyLoadUnknownKeySurvivesFileLoad() throws {
+        let path = try writeTemporaryPolicy("{\"minimumConfidenceTYPO\": 0.9}")
+        XCTAssertThrowsError(try Policy.load(fromFile: path)) { error in
+            guard case AttestError.unknownPolicyKeys(let keys, _) = error else {
+                return XCTFail("expected unknownPolicyKeys, got \(error)")
+            }
+            XCTAssertEqual(keys, ["minimumConfidenceTYPO"])
+        }
+    }
+
+    // MARK: - Codec: lenient decoding
+
+    func testCodecLenientDecodingKeepsValidRecordsAndCountsBadLines() throws {
+        let good = try AttestationCodec.encodeLine(makeAttestation(reviewer: "agent:claude"))
+        let alsoGood = try AttestationCodec.encodeLine(makeAttestation(reviewer: "human:leif"))
+        let body = "\(good)\n{ not json }\n\(alsoGood)"
+        let (attestations, malformedLines) = AttestationCodec.decodeLinesLeniently(body)
+        XCTAssertEqual(attestations.map(\.reviewer), ["agent:claude", "human:leif"])
+        XCTAssertEqual(malformedLines, 1)
+    }
+
+    func testCodecLenientDecodingCleanBodyHasNoMalformedLines() throws {
+        let good = try AttestationCodec.encodeLine(makeAttestation())
+        let (attestations, malformedLines) = AttestationCodec.decodeLinesLeniently("\(good)\n\n\(good)")
+        XCTAssertEqual(attestations.count, 2)
+        XCTAssertEqual(malformedLines, 0)
+    }
+
+    // MARK: - Errors: git stderr surfacing
+
+    func testGitErrorDescriptionIncludesStderrMessage() {
+        let error = AttestError.git(
+            command: "rev-list --reverse HEAD..nope",
+            status: 128,
+            message: "ambiguous argument 'HEAD..nope': unknown revision or path not in the working tree."
+        )
+        XCTAssertEqual(
+            error.errorDescription,
+            "git rev-list --reverse HEAD..nope failed (exit 128): "
+                + "ambiguous argument 'HEAD..nope': unknown revision or path not in the working tree."
+        )
+    }
+
+    func testGitErrorDescriptionOmitsEmptyMessage() {
+        let error = AttestError.git(command: "status", status: 1, message: "")
+        XCTAssertEqual(error.errorDescription, "git status failed (exit 1)")
+    }
+
+    func testUnknownRevisionErrorDescription() {
+        XCTAssertEqual(
+            AttestError.unknownRevision("deadbeef123").errorDescription,
+            "Unknown revision: deadbeef123"
+        )
+    }
+
+    // MARK: - KeyStore: permissions
+
+    func testKeyStoreReportsLoosePermissions() throws {
+        let path = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("attest-key-\(UUID().uuidString)")
+        addTeardownBlock {
+            try? FileManager.default.removeItem(atPath: path)
+        }
+        let keyStore = KeyStore(keyPath: path)
+        // Absent file: nothing to report.
+        XCTAssertNil(keyStore.loosePermissions)
+        // A freshly generated key is 0600: nothing to report.
+        try keyStore.generate(force: false)
+        XCTAssertNil(keyStore.loosePermissions)
+        // Loosened to 0644: reported.
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path)
+        XCTAssertEqual(keyStore.loosePermissions, 0o644)
+    }
+
     func testEmptyCommitRangeChecksZeroCommitsAndPasses() throws {
         // An empty range (e.g. `HEAD..HEAD`) yields no commits; verification
         // reports zero checked and passes — there is nothing to violate.

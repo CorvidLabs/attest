@@ -91,7 +91,8 @@ final class CrossCommitReplayTests: XCTestCase {
         guard spawnResult == 0 else {
             throw AttestError.git(
                 command: spawnArgv.joined(separator: " "),
-                status: spawnResult
+                status: spawnResult,
+                message: "could not spawn the process"
             )
         }
 
@@ -234,7 +235,8 @@ final class CrossCommitReplayTests: XCTestCase {
         guard spawnResult == 0 else {
             throw AttestError.git(
                 command: spawnArgv.joined(separator: " "),
-                status: spawnResult
+                status: spawnResult,
+                message: "could not spawn the process"
             )
         }
 
