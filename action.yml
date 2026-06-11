@@ -71,9 +71,11 @@ runs:
           major="$ACTION_REF"
           # `// empty` so an empty match yields "" (not the string "null", which
           # would be non-empty and trigger a bogus `gh release download null`).
+          # No `2>/dev/null`: gh is silent on the normal empty case, so let real
+          # errors (rate limit, auth) surface; `|| true` still keeps the fallback.
           target="$(gh release list --repo "$repo" --exclude-drafts --exclude-pre-releases \
             --limit 100 --json tagName \
-            --jq "[.[].tagName | select(test(\"^${major}\\\\.\"))][0] // empty" 2>/dev/null || true)"
+            --jq "[.[].tagName | select(test(\"^${major}\\\\.\"))][0] // empty" || true)"
           if [ -n "$target" ]; then
             mode="tag"
           else
