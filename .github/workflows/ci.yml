@@ -144,3 +144,37 @@ jobs:
         run: git config --global --add safe.directory '*'
       - run: swift build
       - run: swift test
+
+  smoke-test-action:
+    # Dogfood the bundled composite action (`uses: ./`) end to end: install →
+    # checksum → verify. The other jobs invoke attest via .build/release
+    # directly, so action.yml's own wiring (binary install, sha verification,
+    # injection-safe env handling, version resolution) had no CI coverage.
+    # macOS is used so the source-build fallback works regardless of
+    # release-asset timing; a policy violation can't fail the wiring check.
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the action's range needs history
+      - name: Run the bundled action against this checkout
+        id: attest
+        uses: ./
+        # A policy violation (or missing policy) must not fail this WIRING smoke
+        # test; the assertion below checks the action installed attest and ran.
+        continue-on-error: true
+        with:
+          range: HEAD~1..HEAD
+      - name: Assert the action installed attest
+        env:
+          BINARY: ${{ steps.attest.outputs.binary }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BINARY" ] || [ ! -x "$BINARY" ]; then
+            echo "::error::The action did not install a runnable attest — install wiring is broken."
+            exit 1
+          fi
+          "$BINARY" --version
+          echo "Action OK — binary=$BINARY"
