@@ -69,9 +69,11 @@ runs:
           # Moving major tag (e.g. v0): pick the newest release within that major.
           # gh lists newest-first, so the first v<major>.* tag is the latest one.
           major="$ACTION_REF"
+          # `// empty` so an empty match yields "" (not the string "null", which
+          # would be non-empty and trigger a bogus `gh release download null`).
           target="$(gh release list --repo "$repo" --exclude-drafts --exclude-pre-releases \
             --limit 100 --json tagName \
-            --jq "[.[].tagName | select(test(\"^${major}\\\\.\"))][0]" 2>/dev/null || true)"
+            --jq "[.[].tagName | select(test(\"^${major}\\\\.\"))][0] // empty" 2>/dev/null || true)"
           if [ -n "$target" ]; then
             mode="tag"
           else
