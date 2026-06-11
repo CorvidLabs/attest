@@ -32,6 +32,18 @@ public struct KeyStore: Sendable {
         FileManager.default.fileExists(atPath: keyPath)
     }
 
+    /// The key file's POSIX permission bits when they allow group or other
+    /// access (anything beyond the owner's `0600`), or `nil` when the file is
+    /// absent or already restricted to the owner. Callers can use this to warn
+    /// that a private key is readable by other users.
+    public var loosePermissions: Int? {
+        guard
+            let attributes = try? FileManager.default.attributesOfItem(atPath: keyPath),
+            let permissions = attributes[.posixPermissions] as? Int
+        else { return nil }
+        return (permissions & 0o077) != 0 ? permissions : nil
+    }
+
     /// Loads the signer from disk.
     /// - Throws: `AttestError.keyNotFound` if no key exists.
     public func load() throws -> Ed25519Signer {

@@ -9,6 +9,13 @@ range) and exits non-zero on any violation.
 attest verify --range origin/main..HEAD --policy .attest.json
 ```
 
+**Parsing is strict.** A misspelled rule is a rule that is off, so an unknown key in the policy
+JSON is a hard error naming the offender and listing the valid rule names — it is never silently
+ignored. Likewise, a `--policy` path passed explicitly must exist (a typo'd path in CI must not
+silently drop your rules), and a file that is not valid JSON is reported with the file name and
+the position of the problem. Only the *implicit* lookup of `.attest.json` (when no `--policy`
+flag is given) may fall back to the permissive default when the file is absent.
+
 A policy is evaluated against *all* of a commit's attestations as a set. The rules that talk
 about "any attestation" or "some attestation" are satisfied (or violated) by records anywhere on
 the commit, not necessarily the same one.

@@ -90,7 +90,8 @@ final class LogCorruptNoteTests: XCTestCase {
         guard spawnResult == 0 else {
             throw AttestError.git(
                 command: spawnArgv.joined(separator: " "),
-                status: spawnResult
+                status: spawnResult,
+                message: "could not spawn the process"
             )
         }
 
@@ -146,19 +147,28 @@ final class LogCorruptNoteTests: XCTestCase {
 
         try git(["notes", "--ref=attest", "append", "-m", "{ not json }", sha], cwd: repo)
 
-        // Human-readable log: clean stderr warning, non-zero exit, clean stdout.
+        // Human-readable log: clean stderr warning, non-zero exit, and the valid
+        // record from the same note still prints — one bad line must not hide it.
         let logResult = try run(attestBinary, ["log", "-C", repo.path])
         XCTAssertEqual(logResult.status, 1, "corrupt note must force a non-zero exit")
         XCTAssertTrue(
-            logResult.stderr.contains("Malformed attestation record: invalid JSON"),
-            "stderr should carry the clean malformed-record message, got: \(logResult.stderr)"
+            logResult.stderr.contains("skipped 1 malformed record line"),
+            "stderr should carry the clean skipped-line warning, got: \(logResult.stderr)"
         )
         XCTAssertFalse(logResult.stderr.contains("DecodingError"), "must not leak Swift error internals")
         XCTAssertFalse(logResult.stdout.contains("DecodingError"), "stdout must stay clean")
+        XCTAssertTrue(
+            logResult.stdout.contains("agent:claude"),
+            "the valid record next to the corrupt line must still be listed, got: \(logResult.stdout)"
+        )
 
-        // JSON mode stays valid (empty array) and still exits non-zero.
+        // JSON mode stays valid, includes the readable record, and exits non-zero.
         let jsonResult = try run(attestBinary, ["log", "-C", repo.path, "--json"])
         XCTAssertEqual(jsonResult.status, 1)
-        XCTAssertEqual(jsonResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "[]")
+        XCTAssertTrue(
+            jsonResult.stdout.contains("\"reviewer\":\"agent:claude\""),
+            "JSON output should include the readable record, got: \(jsonResult.stdout)"
+        )
+        XCTAssertFalse(jsonResult.stderr.contains("DecodingError"))
     }
 }

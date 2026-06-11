@@ -22,6 +22,14 @@ struct AttestCommand: AsyncParsableCommand {
     )
 }
 
+// MARK: - Shared helpers
+
+/// Writes a diagnostic line to stderr so it never contaminates stdout (which
+/// may be piped or parsed as JSON).
+func warn(_ message: String) {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+}
+
 // MARK: - Shared options
 
 struct RepoOptions: ParsableArguments {
@@ -91,7 +99,7 @@ struct Sign: AsyncParsableCommand {
     @Option(name: .long, help: "Who or what reviewed, e.g. 'agent:claude' or 'human:leif'.")
     var reviewer: String
 
-    @Option(name: .long, help: "Reviewer confidence, 0...1.")
+    @Option(name: .long, help: "Reviewer confidence, 0...1. Use --confidence=VALUE for negative values.")
     var confidence: Double?
 
     @Option(name: .long, help: "Recorded verdict: proceed, review, or block.")
@@ -114,6 +122,14 @@ struct Sign: AsyncParsableCommand {
 
     @Flag(name: .long, help: "Emit the stored attestation as JSON.")
     var json = false
+
+    func validate() throws {
+        // Reject out-of-range confidence at the boundary instead of silently
+        // clamping it: a CI step that passes 1.5 should fail loudly, not record 1.0.
+        if let confidence, !(0.0...1.0).contains(confidence) {
+            throw ValidationError("confidence must be in 0...1 (got \(confidence))")
+        }
+    }
 
     func run() async throws {
         let store = try repo.makeStore()
@@ -155,7 +171,15 @@ struct Sign: AsyncParsableCommand {
 
         var signer: Ed25519Signer?
         if sign {
-            signer = try KeyStore().load()
+            let keyStore = KeyStore()
+            if let permissions = keyStore.loosePermissions {
+                warn(
+                    "attest sign: warning: signing key \(keyStore.path) has permissions "
+                        + "0\(String(permissions, radix: 8)) (expected 0600); "
+                        + "run `chmod 600 \(keyStore.path)` to restrict it"
+                )
+            }
+            signer = try keyStore.load()
         }
 
         let attest = Attest(store: store)
@@ -196,8 +220,11 @@ struct Verify: AsyncParsableCommand {
     @Option(name: .long, help: "Check a single commit (SHA or revision). Defaults to HEAD.")
     var commit: String?
 
-    @Option(name: .long, help: "Path to the policy file.")
-    var policy: String = ".attest.json"
+    @Option(name: .long, help: "Path to the policy file (default: .attest.json when present).")
+    var policy: String?
+
+    /// The implicit policy path consulted when `--policy` is not given.
+    private static let defaultPolicyPath = ".attest.json"
 
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
@@ -216,9 +243,14 @@ struct Verify: AsyncParsableCommand {
             commits = [try store.resolve(revision: "HEAD")]
         }
 
+        // An explicitly passed --policy must exist: a typo'd path in CI must not
+        // silently drop the policy's rules. Only the implicit default lookup of
+        // `.attest.json` may fall back to the permissive default when absent.
         let loadedPolicy: Policy
-        if FileManager.default.fileExists(atPath: policy) {
+        if let policy {
             loadedPolicy = try Policy.load(fromFile: policy)
+        } else if FileManager.default.fileExists(atPath: Self.defaultPolicyPath) {
+            loadedPolicy = try Policy.load(fromFile: Self.defaultPolicyPath)
         } else {
             loadedPolicy = .default
         }
@@ -270,32 +302,33 @@ struct Log: AsyncParsableCommand {
             commits = try store.attestedCommits()
         }
 
-        // Read each commit's note independently so one corrupt note does not hide the
-        // rest of the ledger. A malformed record is reported to stderr (loud, not lossy)
-        // and forces a non-zero exit, while every readable commit still prints normally.
+        // Read each commit's note leniently so one corrupt line does not hide the
+        // valid records stored next to it (or the rest of the ledger). A malformed
+        // line is reported to stderr (loud, not lossy) and forces a non-zero exit,
+        // while every readable record still prints normally.
         var groups: [(commit: String, attestations: [Attestation])] = []
         var hadUnreadable = false
         var hadMismatch = false
         for sha in commits {
-            do {
-                let attestations = try store.attestations(for: sha)
-                if !attestations.isEmpty {
-                    groups.append((commit: sha, attestations: attestations))
-                    // Commit binding: a record whose inner `commit` does not match the note
-                    // key it is filed under has been relocated onto another commit. Warn
-                    // loudly (stderr, never stdout) and force a non-zero exit; the listing
-                    // marks it `commit-mismatch` rather than rendering it as a valid record.
-                    for attestation in attestations where attestation.commit != sha {
-                        hadMismatch = true
-                        Self.warn(
-                            "attest log: \(sha): record names commit \(attestation.commit), "
-                                + "not the commit it is stored under (cross-commit mismatch)"
-                        )
-                    }
-                }
-            } catch let error as AttestError {
+            let (attestations, malformedLines) = try store.lenientAttestations(for: sha)
+            if malformedLines > 0 {
                 hadUnreadable = true
-                Self.warn("attest log: skipping \(sha): \(error.errorDescription ?? "unreadable record")")
+                let lines = malformedLines == 1 ? "1 malformed record line" : "\(malformedLines) malformed record lines"
+                warn("attest log: \(sha): skipped \(lines) (invalid JSON); showing the readable records")
+            }
+            if !attestations.isEmpty {
+                groups.append((commit: sha, attestations: attestations))
+                // Commit binding: a record whose inner `commit` does not match the note
+                // key it is filed under has been relocated onto another commit. Warn
+                // loudly (stderr, never stdout) and force a non-zero exit; the listing
+                // marks it `commit-mismatch` rather than rendering it as a valid record.
+                for attestation in attestations where attestation.commit != sha {
+                    hadMismatch = true
+                    warn(
+                        "attest log: \(sha): record names commit \(attestation.commit), "
+                            + "not the commit it is stored under (cross-commit mismatch)"
+                    )
+                }
             }
         }
 
@@ -308,12 +341,6 @@ struct Log: AsyncParsableCommand {
         if hadUnreadable || hadMismatch {
             throw ExitCode(1)
         }
-    }
-
-    /// Writes a diagnostic line to stderr so it never contaminates stdout (which may be
-    /// piped or parsed as JSON).
-    private static func warn(_ message: String) {
-        FileHandle.standardError.write(Data((message + "\n").utf8))
     }
 
     private static func renderJSON(_ groups: [(commit: String, attestations: [Attestation])]) throws -> String {
@@ -362,14 +389,16 @@ struct Export: AsyncParsableCommand {
         let store = try repo.makeStore()
 
         // Range resolution mirrors `verify`/`log`: a single commit, an oldest-first
-        // range, or every attested commit when neither is given.
+        // range, or every attested commit when neither is given. `attestedCommits()`
+        // is newest-first (history order), so reverse it to keep the export's
+        // oldest-first convention.
         let commits: [String]
         if let commit {
             commits = [try store.resolve(revision: commit)]
         } else if let range {
             commits = try store.commits(inRange: range)
         } else {
-            commits = try store.attestedCommits()
+            commits = try store.attestedCommits().reversed()
         }
 
         // Only load a policy when one was explicitly requested; export never

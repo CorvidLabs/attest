@@ -46,6 +46,29 @@ public enum AttestationCodec {
         return result
     }
 
+    /// Decodes a JSON-lines note body leniently: valid records are collected
+    /// and malformed lines are counted instead of failing the whole note, so
+    /// one corrupt line cannot hide the valid records stored next to it.
+    /// Callers that need corruption to be fatal use `decodeLines(_:)`.
+    public static func decodeLinesLeniently(_ body: String) -> (attestations: [Attestation], malformedLines: Int) {
+        let decoder = JSONDecoder()
+        var attestations: [Attestation] = []
+        var malformedLines = 0
+        for line in body.split(separator: "\n", omittingEmptySubsequences: true) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            guard
+                let data = trimmed.data(using: .utf8),
+                let attestation = try? decoder.decode(Attestation.self, from: data)
+            else {
+                malformedLines += 1
+                continue
+            }
+            attestations.append(attestation)
+        }
+        return (attestations, malformedLines)
+    }
+
     /// Encodes a single attestation as one canonical JSON line (no newline).
     public static func encodeLine(_ attestation: Attestation) throws -> String {
         try attestation.jsonString()

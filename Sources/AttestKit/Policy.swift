@@ -87,7 +87,7 @@ public struct Policy: Sendable, Codable, Equatable {
         self.maxAgeDays = maxAgeDays
     }
 
-    enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case requireAttestation
         case requireHumanApprovalWhenVerdictAtLeast
         case requireTestsPassed
@@ -101,7 +101,37 @@ public struct Policy: Sendable, Codable, Equatable {
         case maxAgeDays
     }
 
+    /// A pass-through key type used to read every key present in the JSON, so
+    /// unknown (e.g. misspelled) rule names can be rejected instead of silently
+    /// ignored — a misspelled rule is a rule that is off.
+    private struct AnyPolicyKey: CodingKey {
+        let stringValue: String
+        let intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = String(intValue)
+            self.intValue = intValue
+        }
+    }
+
     public init(from decoder: any Decoder) throws {
+        // Strict decoding: reject unknown keys before reading any rule, naming
+        // the offenders and listing the valid rule names.
+        let rawContainer = try decoder.container(keyedBy: AnyPolicyKey.self)
+        let validKeys = CodingKeys.allCases.map(\.stringValue)
+        let unknownKeys = rawContainer.allKeys
+            .map(\.stringValue)
+            .filter { !validKeys.contains($0) }
+            .sorted()
+        guard unknownKeys.isEmpty else {
+            throw AttestError.unknownPolicyKeys(keys: unknownKeys, validKeys: validKeys.sorted())
+        }
+
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.requireAttestation = try container.decodeIfPresent(Bool.self, forKey: .requireAttestation) ?? true
         self.requireHumanApprovalWhenVerdictAtLeast =
@@ -123,9 +153,52 @@ public struct Policy: Sendable, Codable, Equatable {
     public static let `default` = Policy()
 
     /// Loads a policy from a JSON file at `path`.
+    ///
+    /// Decoding is strict: a missing file throws `AttestError.policyNotFound`,
+    /// an unknown (misspelled) rule name throws `AttestError.unknownPolicyKeys`,
+    /// and any other decoding problem is rendered as a human-readable
+    /// `AttestError.malformedPolicy` (file, problem, and key path / position
+    /// where available) rather than a raw Swift `DecodingError`.
     public static func load(fromFile path: String) throws -> Policy {
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw AttestError.policyNotFound(path)
+        }
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
-        return try JSONDecoder().decode(Policy.self, from: data)
+        do {
+            return try JSONDecoder().decode(Policy.self, from: data)
+        } catch let error as AttestError {
+            throw error
+        } catch let error as DecodingError {
+            throw AttestError.malformedPolicy(file: path, detail: Self.describe(error))
+        }
+    }
+
+    /// Renders a `DecodingError` as a short human-readable problem description.
+    private static func describe(_ error: DecodingError) -> String {
+        switch error {
+        case .dataCorrupted(let context):
+            // Foundation puts the useful position info ("around line N,
+            // column M") in the underlying NSError's debug description.
+            if let underlying = context.underlyingError as NSError?,
+               let debug = underlying.userInfo[NSDebugDescriptionErrorKey] as? String {
+                return "not valid JSON (\(debug))"
+            }
+            return "not valid JSON (\(context.debugDescription))"
+        case .keyNotFound(let key, _):
+            return "missing required key '\(key.stringValue)'"
+        case .typeMismatch(_, let context):
+            return "wrong value type at '\(keyPath(of: context))' (\(context.debugDescription))"
+        case .valueNotFound(_, let context):
+            return "missing value at '\(keyPath(of: context))' (\(context.debugDescription))"
+        @unknown default:
+            return "could not be decoded"
+        }
+    }
+
+    /// The dotted key path of a decoding context, e.g. `signerPinning.human:leif`.
+    private static func keyPath(of context: DecodingError.Context) -> String {
+        let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+        return path.isEmpty ? "(top level)" : path
     }
 }
 

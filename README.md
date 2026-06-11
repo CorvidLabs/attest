@@ -335,7 +335,7 @@ Pin to the moving `@v0` tag to track the latest 0.x release, or to an exact tag
 | Input | Default | Description |
 |-------|---------|-------------|
 | `range` | `origin/main..HEAD` | Git range to verify (needs full history). |
-| `policy` | `.attest.json` | Path to the policy file (relative to `working-directory`). |
+| `policy` | `.attest.json` | Path to the policy file (relative to `working-directory`). It must exist: a missing or misspelled policy fails the gate rather than silently passing under the permissive default. |
 | `working-directory` | `.` | Directory to run `attest verify` in. |
 | `version` | *(action ref)* | attest release to install (`v0.3.0` or `latest`); defaults to the pinned tag, else `latest`. |
 
