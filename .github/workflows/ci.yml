@@ -144,3 +144,83 @@ jobs:
         run: git config --global --add safe.directory '*'
       - run: swift build
       - run: swift test
+
+  smoke-test-action:
+    # Dogfood the bundled composite action (`uses: ./`) end to end: install →
+    # checksum → verify. The other jobs invoke attest via .build/release
+    # directly, so action.yml's own wiring (binary install, sha verification,
+    # injection-safe env handling, version resolution) had no CI coverage.
+    # macOS is used so the source-build fallback works regardless of
+    # release-asset timing; a policy violation can't fail the wiring check.
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the action's range needs history
+      - name: Run the bundled action against this checkout
+        id: attest
+        uses: ./
+        # A policy violation (or missing policy) must not fail this WIRING smoke
+        # test; the assertion below checks the action installed attest and ran.
+        continue-on-error: true
+        with:
+          range: HEAD~1..HEAD
+      - name: Assert the action installed attest
+        env:
+          BINARY: ${{ steps.attest.outputs.binary }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BINARY" ] || [ ! -x "$BINARY" ]; then
+            echo "::error::The action did not install a runnable attest — install wiring is broken."
+            exit 1
+          fi
+          "$BINARY" --version
+          echo "Action OK — binary=$BINARY"
+
+  guard-no-self-hosted:
+    # Security tripwire: this repo is PUBLIC, so a self-hosted runner would let a
+    # fork PR run untrusted code on our machines. Parse each job's runs-on and
+    # fail if any resolves to self-hosted. Inspecting runs-on specifically (vs
+    # grepping the file) means the check can't false-match prose or its own job.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert no workflow uses a self-hosted runner
+        run: |
+          set -euo pipefail
+          python3 -c "import yaml" 2>/dev/null || pip install -q pyyaml
+          python3 - <<'PY'
+          import sys, glob, yaml
+          bad = []
+          for f in sorted(glob.glob(".github/workflows/*.yml") + glob.glob(".github/workflows/*.yaml")):
+              try:
+                  doc = yaml.safe_load(open(f)) or {}
+              except Exception as e:
+                  print(f"::warning::could not parse {f}: {e}")
+                  continue
+              for jname, job in (doc.get("jobs") or {}).items():
+                  if not isinstance(job, dict):
+                      continue
+                  ro = job.get("runs-on")
+                  if isinstance(ro, str):
+                      labels = [ro]
+                  elif isinstance(ro, list):
+                      labels = [str(x) for x in ro]
+                  elif isinstance(ro, dict):
+                      lbls = ro.get("labels", [])
+                      labels = [lbls] if isinstance(lbls, str) else [str(x) for x in lbls]
+                  else:
+                      labels = []
+                  if any("self-hosted" in s.lower() for s in labels):
+                      bad.append(f"{f}: job '{jname}' runs-on={ro!r}")
+          if bad:
+              print("::error::A workflow targets a self-hosted runner. Public repos must use GitHub-hosted runners only.")
+              for b in bad:
+                  print("  " + b)
+              sys.exit(1)
+          print("OK: no self-hosted runner targeting in any workflow.")
+          PY

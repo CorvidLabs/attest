@@ -50,17 +50,40 @@ runs:
 
         repo="${ACTION_REPO:-CorvidLabs/attest}"
 
-        # Resolve which release to install. An explicit `version` wins; otherwise
-        # use the ref the action was pinned to when it looks like a version tag.
-        # `@v0.3.0` installs exactly v0.3.0; the moving `@v0` tag has no release of
-        # its own, so its download falls through to "latest" below. Anything else
-        # (branch/sha) installs latest.
+        # Resolve which release to install, WITHOUT ever crossing a major
+        # boundary. An explicit `version` wins; otherwise derive from the ref the
+        # action was pinned to:
+        #   @v0.3.0           -> install exactly v0.3.0
+        #   @v0               -> newest v0.* release (the moving major tag has no
+        #                        release of its own, so resolve it to a concrete
+        #                        v0.* tag; a future v1 `latest` can never leak in)
+        #   branch / sha      -> install the latest release
+        # A requested tag with no matching asset does NOT silently fall back to a
+        # different version; `bin` stays empty and we build from source below.
         ver="${INPUT_VERSION:-}"
-        if [ -z "$ver" ]; then
-          case "$ACTION_REF" in
-            v[0-9]*) ver="$ACTION_REF" ;;
-            *)       ver="latest" ;;
-          esac
+        mode="latest"   # latest | tag | none
+        target=""       # concrete release tag when mode=tag
+        if [ -n "$ver" ]; then
+          if [ "$ver" = "latest" ]; then mode="latest"; else mode="tag"; target="$ver"; fi
+        elif printf '%s' "$ACTION_REF" | grep -Eq '^v[0-9]+$'; then
+          # Moving major tag (e.g. v0): pick the newest release within that major.
+          # gh lists newest-first, so the first v<major>.* tag is the latest one.
+          major="$ACTION_REF"
+          # `// empty` so an empty match yields "" (not the string "null", which
+          # would be non-empty and trigger a bogus `gh release download null`).
+          # No `2>/dev/null`: gh is silent on the normal empty case, so let real
+          # errors (rate limit, auth) surface; `|| true` still keeps the fallback.
+          target="$(gh release list --repo "$repo" --exclude-drafts --exclude-pre-releases \
+            --limit 100 --json tagName \
+            --jq "[.[].tagName | select(test(\"^${major}\\\\.\"))][0] // empty" || true)"
+          if [ -n "$target" ]; then
+            mode="tag"
+          else
+            mode="none"
+            echo "::warning::No published ${major}.* release found; building from source."
+          fi
+        elif printf '%s' "$ACTION_REF" | grep -Eq '^v[0-9]+\.[0-9]'; then
+          mode="tag"; target="$ACTION_REF"   # full release tag
         fi
 
         # Pick the release asset for this runner's OS/arch.
@@ -81,26 +104,23 @@ runs:
         bin=""
 
         download() {
-          # download <tag-or-empty> -> 0 if the binary asset landed in $tmp
-          local tag="$1"
+          # Fetch $asset (+ sidecar) for the resolved release into $tmp. Returns
+          # 0 only when the binary asset actually landed.
           rm -f "$tmp/$asset" "$tmp/$asset.sha256"
-          if [ "$tag" = "latest" ] || [ -z "$tag" ]; then
+          if [ "$mode" = "latest" ]; then
             gh release download --repo "$repo" \
               --pattern "$asset" --pattern "$asset.sha256" \
               --dir "$tmp" --clobber 2>/dev/null || return 1
           else
-            gh release download "$tag" --repo "$repo" \
+            gh release download "$target" --repo "$repo" \
               --pattern "$asset" --pattern "$asset.sha256" \
               --dir "$tmp" --clobber 2>/dev/null || return 1
           fi
           [ -f "$tmp/$asset" ]
         }
 
-        if [ -n "$asset" ]; then
-          # NOTE: a `@v<major>` pin with no matching release falls through to
-          # "latest", which crosses a major boundary once v(N+1) ships. Pin an
-          # exact tag (e.g. @v0.3.0) if you must never cross majors.
-          if download "$ver" || { [ "$ver" != "latest" ] && download "latest"; }; then
+        if [ -n "$asset" ] && [ "$mode" != "none" ]; then
+          if download; then
             # Verify the checksum sidecar when present; a mismatch is fatal.
             if [ -f "$tmp/$asset.sha256" ]; then
               expected="$(cut -d' ' -f1 < "$tmp/$asset.sha256")"
@@ -119,7 +139,7 @@ runs:
             fi
             chmod +x "$tmp/$asset"
             bin="$tmp/$asset"
-            echo "Installed attest ($asset, $ver) for $os/$arch."
+            echo "Installed attest ($asset, ${target:-latest}) for $os/$arch."
           fi
         fi
 
@@ -129,7 +149,10 @@ runs:
           if command -v swift >/dev/null 2>&1; then
             echo "::warning::No prebuilt attest for $os/$arch; building from source. Use a supported runner (macOS or Linux x86_64) to skip this."
             swift build -c release --package-path "$ACTION_PATH"
-            bin="$ACTION_PATH/.build/release/attest"
+            # Ask SwiftPM for the bin dir rather than hardcoding .build/release
+            # (mirrors release.yml; --show-bin-path only prints, never rebuilds).
+            bindir="$(swift build -c release --package-path "$ACTION_PATH" --show-bin-path)"
+            bin="$bindir/attest"
           else
             echo "::error::No prebuilt attest binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
             exit 1
