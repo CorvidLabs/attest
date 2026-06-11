@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.4.0] - 2026-06-11
+
+### Other
+
+- Fix: an explicitly passed `--policy` path that does not exist is now a hard error (exit 1, `Policy file not found: …`) instead of a silent PASS under the permissive default — a typo'd policy path in CI can no longer drop `requireSignature`/pinning rules. The implicit `.attest.json` lookup still falls back silently when absent.
+- Fix: policy parsing is strict — an unknown (misspelled) rule name like `minimumConfidenceTYPO` is a hard error naming the offending key(s) and listing the valid rule names, instead of being silently ignored.
+- Fix: a malformed policy file now renders a human message (`Malformed policy <file>: not valid JSON (… line/column …)`, or the offending key path on a type mismatch) instead of dumping a raw Swift `DecodingError`.
+- Fix: `attest sign` rejects out-of-range `--confidence` at the CLI (exit 64, `confidence must be in 0...1`) instead of silently clamping 1.5 to 1.0; the library clamp remains as a safety net. Negative values use the `--confidence=-0.3` form.
+- Fix: a bare `attest log` lists attested commits newest-first in history order (like the `--range` path) instead of SHA-alphabetical order; a bare `attest export` covers them oldest-first, matching its range convention.
+- Fix: bad commit/range errors surface git's own explanation (`Unknown revision: deadbeef123`; `… unknown revision or path not in the working tree.`) instead of leaking plumbing like `git rev-parse --verify deadbeef123^{commit} failed (exit 128)`.
+- Fix: one corrupt note line no longer hides the valid records stored in the same note — `attest log` skips it with a stderr warning (and still exits non-zero) while printing every readable record.
+- Add: `attest sign --sign` warns on stderr when the signing key file's permissions are looser than `0600`.
+
 ## [v0.3.2] - 2026-06-10
 
 ### Other
@@ -48,22 +61,6 @@
 - Add: colorful terminal output + red site palette (#9) (fca01e2)
 - Chore: Node 24 workflow opt-in + review polish (#8) (c6f9826)
 - Add: Astro GitHub Pages marketing + docs site (#7) (69c5191)
-
-## [Unreleased]
-
-### Other
-
-- Fix: an explicitly passed `--policy` path that does not exist is now a hard error (exit 1, `Policy file not found: …`) instead of a silent PASS under the permissive default — a typo'd policy path in CI can no longer drop `requireSignature`/pinning rules. The implicit `.attest.json` lookup still falls back silently when absent.
-- Fix: policy parsing is strict — an unknown (misspelled) rule name like `minimumConfidenceTYPO` is a hard error naming the offending key(s) and listing the valid rule names, instead of being silently ignored.
-- Fix: a malformed policy file now renders a human message (`Malformed policy <file>: not valid JSON (… line/column …)`, or the offending key path on a type mismatch) instead of dumping a raw Swift `DecodingError`.
-- Fix: `attest sign` rejects out-of-range `--confidence` at the CLI (exit 64, `confidence must be in 0...1`) instead of silently clamping 1.5 to 1.0; the library clamp remains as a safety net. Negative values use the `--confidence=-0.3` form.
-- Fix: a bare `attest log` lists attested commits newest-first in history order (like the `--range` path) instead of SHA-alphabetical order; a bare `attest export` covers them oldest-first, matching its range convention.
-- Fix: bad commit/range errors surface git's own explanation (`Unknown revision: deadbeef123`; `… unknown revision or path not in the working tree.`) instead of leaking plumbing like `git rev-parse --verify deadbeef123^{commit} failed (exit 128)`.
-- Fix: one corrupt note line no longer hides the valid records stored in the same note — `attest log` skips it with a stderr warning (and still exits non-zero) while printing every readable record.
-- Add: `attest sign --sign` warns on stderr when the signing key file's permissions are looser than `0600`.
-- Chore: surface the policy trust-model caveats in the docs, tidy the malformed-record error and `attest log` corrupt-note handling, and scrub the changelog.
-- Add: attest self-dogfooding. attest records provenance attestations on its OWN commits. CI (self-hosted macOS) attests each commit with an `agent:ci` record and gates it against `.attest.json` (fatal), pushing the growing ledger to `refs/notes/attest` on `main`. New `examples/dogfood.sh` (PASS under a lax / FAIL under a strict policy on attest's real HEAD) and `docs/dogfooding.md` with real captured proof.
-- Add: colorful terminal output for `attest log` and `verify`. Semantic, TTY/`NO_COLOR`-aware ANSI colour via a dependency-free `Colorizer`, gated by `--color auto|always|never`; piped and `--json` output stays plain.
 
 ## [v0.1.0] - 2026-06-09
 
