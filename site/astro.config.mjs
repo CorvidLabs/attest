@@ -22,9 +22,13 @@ export default defineConfig({
   markdown: {
     remarkPlugins: [rewriteMdLinks],
     shikiConfig: {
-      // github-dark-high-contrast passes WCAG AA for all token colors
-      // (#6A737D comment color in github-dark fails 3.05:1 on its #24292e bg)
-      theme: 'github-dark-high-contrast',
+      // Dual themes so fenced code follows the page's light/dark mode.
+      // Both are high-contrast variants that pass WCAG AA for token colors.
+      // The .astro-code light/dark swap is wired in DocsLayout via CSS vars.
+      themes: {
+        light: 'github-light-high-contrast',
+        dark: 'github-dark-high-contrast',
+      },
     },
   },
 })

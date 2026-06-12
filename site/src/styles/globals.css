@@ -1,51 +1,71 @@
+/* ============================================================
+   attest docs — built on the CorvidLabs design system.
+
+   tokens.css (vendored in public/brand) is the single source of
+   truth for color in both light and dark. It is linked from the
+   document <head> (see BaseLayout) so it loads before this file;
+   here we alias the site's legacy variable names onto brand tokens
+   so every existing component themes for free. Never hardcode hex —
+   build on the variables below.
+   ============================================================ */
+
 :root {
-  /* Brand palette: a refined crimson/rose. The near-black background carries a faint
-     warm-red tint (rather than the previous green) so the whole surface reads on-brand. */
-  --bg: #100a0c;
-  --bg-raised: #170e11;
-  --bg-raised-2: #1d1216;
-  --border: #2b1c20;
-  --border-strong: #3d2a2f;
-  --text: #f5f1f2;
-  --text-muted: #ccbcc0;
-  --text-dim: #a3939a;
-  /* Accent: a polished rose-red (#e11d48 family), softer and more premium than a harsh
-     fire-engine red, while still reading as confident/trustworthy. Contrast checked AA. */
-  --accent: #e11d48;
-  --accent-bright: #fb7185;
-  --accent-deep: #881337;
-  --accent-muted: rgba(225, 29, 72, 0.10);
-  --accent-glow: rgba(225, 29, 72, 0.18);
-  --focus: #fb7185;
-  --radius: 10px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  --serif: "Iowan Old Style", "Apple Garamond", "Baskerville", Georgia, serif;
-  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  /* semantic "warn": used for spoofed / stale / blocked trust signals */
-  --warn: #fbbf24;
-  --warn-muted: rgba(251, 191, 36, 0.10);
-  /* semantic "block": a hard policy violation */
-  --block: #f87171;
-  --block-muted: rgba(248, 113, 113, 0.10);
-  /* semantic "ok": verified / PASS / signed success cues. Stays GREEN even on the
-     red-branded site: it mirrors the CLI's semantic terminal colour, where green means
-     "verified". Brand/accent went red; success indicators deliberately did not. */
-  --ok: #34d399;
-  --ok-bright: #6ee7b7;
-  --ok-muted: rgba(52, 211, 153, 0.12);
-  /* semantic "info": cyan, mirroring the CLI's reviewer-identity colour. Like the
-     ok/warn/block cues, this is a meaning colour, independent of the red brand. */
-  --info: #67e8f9;
+  /* Surfaces — mapped onto brand tokens (light + dark for free). */
+  --bg: var(--paper);
+  --bg-raised: var(--surface);
+  --bg-raised-2: var(--surface-strong);
+  --border: var(--hairline);
+  --border-strong: var(--ink-45);
+  --text: var(--ink);
+  --text-muted: var(--ink-70);
+  --text-dim: var(--ink-60);
+
+  /* Accent — corvid feather sheen (never purple, never red). */
+  --accent: var(--sheen);
+  --accent-bright: var(--sheen-strong);
+  --accent-deep: var(--sheen-strong);
+  --accent-muted: var(--ink-06);
+  --accent-glow: var(--ink-06);
+  --focus: var(--sheen);
+
+  /* Square corners per the standard. */
+  --radius: 0px;
+
+  /* Type — Schibsted Grotesk (display/body) + Spline Sans Mono (code). */
+  --font: var(--font-display);
+  --serif: var(--font-display);
+  --mono: var(--font-mono);
+
+  /* Semantic state colors → brand state tokens. */
+  --warn: var(--warning);
+  --warn-muted: var(--ink-06);
+  --block: var(--danger);
+  --block-muted: var(--ink-06);
+  --ok: var(--success);
+  --ok-bright: var(--success);
+  --ok-muted: var(--ink-06);
+  --info: var(--sheen);
+
   --tap: 44px;
   --max-w: 1180px;
   --container-pad: 32px;
 }
 
+/* On ink (dark), the bright glint reads as the accent for small text. */
+:root[data-theme="dark"] {
+  --accent-bright: var(--sheen-bright);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent-bright: var(--sheen-bright);
+  }
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 100%; -webkit-text-size-adjust: 100%; }
 body {
-  background: var(--bg); color: var(--text);
-  font-family: var(--font); font-size: 1rem; line-height: 1.6;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-display); font-size: 1rem; line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 ul, ol { list-style: none; }
@@ -58,6 +78,29 @@ pre code { white-space: pre; word-break: normal; word-wrap: normal; }
 
 /* Shiki / astro syntax-highlighted blocks */
 pre.astro-code { max-width: 100%; box-sizing: border-box; overflow-x: auto; contain: layout; }
+
+/* Dual-theme Shiki: swap to the dark token set when the page is dark.
+   Astro emits --shiki-dark / --shiki-dark-bg on each token; we activate
+   them under a forced dark theme and under the OS preference (unless a
+   forced-light page overrides). */
+:root[data-theme="dark"] .astro-code,
+:root[data-theme="dark"] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .astro-code,
+  :root:not([data-theme="light"]) .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+    text-decoration: var(--shiki-dark-text-decoration) !important;
+  }
+}
 
 /* Responsive tables */
 table { max-width: 100%; box-sizing: border-box; }
@@ -78,17 +121,20 @@ a:focus-visible, button:focus-visible, input:focus-visible,
 select:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
-  border-radius: 4px;
 }
 
 .skip-link {
   position: absolute; top: -100px; left: 8px;
-  background: var(--accent); color: #ffffff;
-  padding: 12px 18px; border-radius: 8px;
+  background: var(--sheen); color: var(--paper);
+  padding: 12px 18px;
   font-weight: 600; text-decoration: none; z-index: 100;
   transition: top .15s;
 }
 .skip-link:focus { top: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+}
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;

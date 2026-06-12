@@ -5,7 +5,14 @@ import { base } from '../lib/path'
   <div class="container">
     <div class="foot-grid">
       <div class="foot-brand">
-        <p class="logo"><span aria-hidden="true">🔏</span> attest</p>
+        <p class="logo">
+          <svg class="foot-mark" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">
+            <circle cx="24" cy="32" r="18"/>
+            <path d="M33 21.5 L58.5 29.5 L33 39.5 Z"/>
+            <circle cx="27.5" cy="26" r="3" fill="var(--paper)"/>
+          </svg>
+          attest
+        </p>
         <p class="foot-tagline">Signed provenance for code changes: a verifiable, policy-gated ledger of who reviewed what, and at what confidence.</p>
         <p class="foot-tagline">A <a href="https://corvidlabs.xyz">CorvidLabs</a> project.</p>
       </div>
@@ -42,7 +49,8 @@ import { base } from '../lib/path'
     gap: 40px; margin-bottom: 36px; }
   .foot-brand { display: flex; flex-direction: column; gap: 12px; }
   .foot-brand .logo { display: flex; align-items: center; gap: 8px;
-    color: var(--text); font-weight: 600; font-size: 1.0625rem; }
+    color: var(--text); font-weight: 700; font-size: 1.0625rem; }
+  .foot-brand .logo .foot-mark { width: 22px; height: 22px; color: var(--ink); }
   .foot-brand .foot-tagline { color: var(--text-muted); font-size: 0.9375rem; line-height: 1.5; }
   .foot-brand .foot-tagline a { color: var(--accent-bright); display: inline-block; padding: 4px 0; }
   .foot-brand .foot-tagline a:hover { text-decoration: underline; }

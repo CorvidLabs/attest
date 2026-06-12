@@ -62,14 +62,14 @@ const { title, description, section } = Astro.props
   .doc-body :global(li) { margin-bottom: 6px; line-height: 1.7; }
   .doc-body :global(a) { color: var(--accent-bright); text-decoration: underline; text-underline-offset: 3px;
     display: inline-block; padding: 2px 0; }
-  .doc-body :global(code) { font-family: var(--mono); font-size: 0.875em; padding: 2px 6px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px; color: var(--accent-bright); }
-  .doc-body :global(pre) { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin-bottom: 20px; max-width: 100%; box-sizing: border-box; white-space: pre; }
-  .doc-body :global(pre code) { background: transparent; border: 0; padding: 0; color: var(--text); white-space: pre; word-break: normal; }
+  .doc-body :global(code) { font-family: var(--mono); font-size: 0.875em; padding: 2px 6px; background: var(--surface-strong); border: 1px solid var(--border); color: var(--code-keyword); }
+  .doc-body :global(pre) { background: var(--surface); border: 1px solid var(--border); padding: 16px 18px; overflow-x: auto; margin-bottom: 20px; max-width: 100%; box-sizing: border-box; white-space: pre; font-family: var(--mono); }
+  .doc-body :global(pre code) { background: transparent; border: 0; padding: 0; color: var(--text); white-space: pre; word-break: normal; font-family: var(--mono); }
   .doc-body :global(table) { display: block; overflow-x: auto; max-width: 100%; box-sizing: border-box; width: 100%; border-collapse: collapse; }
   .doc-body :global(th), .doc-body :global(td) { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 0.9375rem; }
-  .doc-body :global(th) { background: var(--bg-raised); color: var(--text); }
+  .doc-body :global(th) { background: var(--surface); color: var(--text); }
   .doc-body :global(blockquote) { border-left: 3px solid var(--accent); background: var(--accent-muted);
-    padding: 12px 18px; margin: 20px 0; border-radius: 0 8px 8px 0; color: var(--text-muted); }
+    padding: 12px 18px; margin: 20px 0; color: var(--text-muted); }
   .doc-body :global(blockquote p:last-child) { margin-bottom: 0; }
   .doc-body :global(thead), .doc-body :global(tbody), .doc-body :global(tr) { max-width: 100%; }
   @media (max-width: 900px) {
@@ -80,16 +80,15 @@ const { title, description, section } = Astro.props
       border-right: none;
       border-bottom: 1px solid var(--border);
       padding: 16px 20px;
-      background: var(--bg-raised);
+      background: var(--surface);
     }
     .article { padding: 28px 20px; }
     .contents-toggle {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: var(--bg-raised);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
       color: var(--accent-bright);
       font-size: 0.9375rem;
       font-weight: 600;

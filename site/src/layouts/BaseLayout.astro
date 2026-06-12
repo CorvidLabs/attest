@@ -17,9 +17,25 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).to
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Pre-paint: apply a stored/forced theme before first paint, no flash. -->
+  <script is:inline>
+    (() => {
+      try {
+        const q = new URLSearchParams(location.search).get("theme");
+        const t = q || localStorage.getItem("corvid-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (_) {}
+    })();
+  </script>
   <title>{title}</title>
   <meta name="description" content={description} />
-  <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+  <!-- Vendored CorvidLabs brand tokens: the single source of truth for
+       color in light + dark. Loaded before bundled styles. -->
+  <link rel="stylesheet" href={`${base}brand/tokens.css`} />
+  <link rel="icon" type="image/svg+xml" href={`${base}brand/favicon.svg`} />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;900&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="canonical" href={canonical} />
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
@@ -34,5 +50,6 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).to
   <Header />
   <slot />
   <Footer />
+  <script is:inline defer src={`${base}brand/theme.js`}></script>
 </body>
 </html>
