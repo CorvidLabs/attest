@@ -1,0 +1,59 @@
+---
+// Minimal, self-contained redirect page for the retired standalone attest site.
+// The marketing site and docs have fully migrated to the CorvidLabs hub, so every
+// route here just bounces visitors (and crawlers) to the new home.
+//
+// Each page carries a meta http-equiv="refresh" (instant client redirect), a
+// <link rel="canonical"> (so search engines fold this URL into the hub URL), and
+// a visible fallback link in case JS/meta-refresh is blocked.
+interface Props {
+  to: string
+  title?: string
+}
+
+const { to, title = 'This site has moved' } = Astro.props
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content={`0; url=${to}`} />
+    <link rel="canonical" href={to} />
+    <meta name="robots" content="noindex, follow" />
+    <title>{title} · attest</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0d0f12;
+        color: #e6e8eb;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        text-align: center;
+        padding: 24px;
+      }
+      main { max-width: 36rem; }
+      a {
+        color: #8ab4ff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      a:hover, a:focus { text-decoration: underline; }
+      p { line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>This site has moved to CorvidLabs.</p>
+      <p>
+        <a href={to}>This site has moved to CorvidLabs &rarr;</a>
+      </p>
+      <noscript>
+        <p>If you are not redirected automatically, follow the link above.</p>
+      </noscript>
+    </main>
+  </body>
+</html>
