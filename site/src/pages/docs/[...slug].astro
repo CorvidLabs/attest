@@ -1,17 +1,16 @@
 ---
 import { getCollection } from 'astro:content'
-import DocsLayout from '../../layouts/DocsLayout.astro'
+import Redirect from '../../layouts/Redirect.astro'
+import { HUB_DOCS } from '../../lib/hub'
 
+// The docs have moved to the CorvidLabs hub. We still generate a route for every
+// former doc slug so old deep links resolve to a real page that redirects to the
+// hub docs, rather than falling through to the 404.
 export async function getStaticPaths() {
   const entries = await getCollection('docs')
   return entries
     .filter(e => e.slug !== 'index')
-    .map(entry => ({ params: { slug: entry.slug }, props: { entry } }))
+    .map(entry => ({ params: { slug: entry.slug } }))
 }
-
-const { entry } = Astro.props
-const { Content } = await entry.render()
 ---
-<DocsLayout title={entry.data.title} description={entry.data.description} section={entry.data.section}>
-  <Content />
-</DocsLayout>
+<Redirect to={HUB_DOCS} title="The docs have moved to CorvidLabs" />
