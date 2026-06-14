@@ -1,7 +1,30 @@
 name: CI
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'action.yml'
+      - 'specs/**'
+      - 'fledge.toml'
+      - '.github/workflows/ci.yml'
   pull_request:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'action.yml'
+      - 'specs/**'
+      - 'fledge.toml'
+      - '.github/workflows/ci.yml'
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 jobs:
@@ -10,6 +33,7 @@ jobs:
   # -----------------------------------------------------------------------
   build-test-macos:
     runs-on: macos-latest
+    timeout-minutes: 30
     # contents: write lets the dogfood step push the growing provenance ledger
     # to refs/notes/attest on pushes to main (no-op on PRs -- see the step below).
     # statuses: write lets the step below post a GitHub commit status named
@@ -22,7 +46,7 @@ jobs:
       # fetch-depth: 0 so the PR head commit is present locally on pull_request
       # events (checkout defaults to a shallow merge ref). attest sign validates
       # the target commit exists, so the head SHA it attests must be fetched.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Install fledge
@@ -135,7 +159,7 @@ jobs:
     container: swift:6.0
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # The Swift container runs as root; mark the checkout safe so git
@@ -161,10 +185,11 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # the action's range needs history
       - name: Run the bundled action against this checkout
@@ -193,10 +218,11 @@ jobs:
     # fail if any resolves to self-hosted. Inspecting runs-on specifically (vs
     # grepping the file) means the check can't false-match prose or its own job.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Assert no workflow uses a self-hosted runner
         run: |
           set -euo pipefail
