@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.5.0] - 2026-06-24
+
+### Other
+
+- Add: `attest forward --from <source> --to <target>` records a fresh landed-commit
+  attestation from already-reviewed source provenance, supporting squash-merge workflows
+  without weakening exact-SHA verification.
+- Add: the GitHub Action can run forwarding before verification via `forward-from`,
+  `forward-to`, `forward-reviewer`, and `forward-sign`.
+- Security: forwarding discards signed source records whose signatures do not verify, so
+  tampered source provenance cannot be laundered into a new merge/CI attestation.
+- Docs: document the squash-merge workflow across README, CLI/CI docs, site docs, and
+  provenance-ledger spec v10.
+
 ## [v0.4.0] - 2026-06-11
 
 ### Other
