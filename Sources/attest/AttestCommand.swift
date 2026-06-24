@@ -245,6 +245,8 @@ struct Forward: AsyncParsableCommand {
             throw AttestError.noAttestations(commit: source)
         }
 
+        // Forwarding composes a source set into one landed-commit statement:
+        // strongest confidence, most severe verdict, and any positive test/human signal.
         let forwarded = Attestation(
             commit: target,
             reviewer: reviewer,
