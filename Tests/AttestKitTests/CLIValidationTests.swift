@@ -376,4 +376,34 @@ final class CLIValidationTests: XCTestCase {
         XCTAssertEqual(result.status, 1)
         XCTAssertTrue(result.stderr.contains("No attestations found for"))
     }
+
+    func testForwardIgnoresInvalidSignedSourceAttestations() throws {
+        let repo = try makeScratchRepo()
+        let source = try currentHead(in: repo)
+        try git(["commit", "-q", "--allow-empty", "-m", "landed"], cwd: repo)
+
+        let validLowTrust = """
+        {"commit":"\(source)","confidence":0.1,"humanApproved":false,"reviewer":"agent:low","testsPassed":false,"timestamp":1700000000}
+        """
+        let invalidSignedHighTrust = """
+        {"commit":"\(source)","confidence":1,"humanApproved":true,"publicKey":"BBBB","reviewer":"human:spoofed","signature":"AAAA","testsPassed":true,"timestamp":1700000001}
+        """
+        try git(
+            ["notes", "--ref=attest", "add", "-m", validLowTrust + "\n" + invalidSignedHighTrust, source],
+            cwd: repo
+        )
+
+        let forwarded = try run(
+            attestBinary,
+            ["forward", "-C", repo.path, "--from", source, "--to", "HEAD", "--reviewer", "ci:merge-bot"]
+        )
+        XCTAssertEqual(forwarded.status, 0, "forward should use the valid source record: \(forwarded.stderr)")
+
+        let log = try run(attestBinary, ["log", "-C", repo.path, "--commit", "HEAD", "--json"])
+        XCTAssertTrue(log.stdout.contains("\"confidence\":0.1"), "must not launder invalid signed confidence: \(log.stdout)")
+        XCTAssertTrue(log.stdout.contains("\"humanApproved\":false"), "must not launder invalid signed approval: \(log.stdout)")
+        XCTAssertTrue(log.stdout.contains("\"testsPassed\":false"), "must not launder invalid signed test status: \(log.stdout)")
+        XCTAssertTrue(log.stdout.contains("source reviewers: agent:low"), "note should only name valid source reviewers: \(log.stdout)")
+        XCTAssertFalse(log.stdout.contains("human:spoofed"), "invalid signed reviewer must be discarded: \(log.stdout)")
+    }
 }

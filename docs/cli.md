@@ -84,6 +84,8 @@ attest verify --range "$BEFORE..HEAD" --policy .attest.json
 
 The forwarded record's `commit` is the landed commit SHA. The source SHA and source reviewers are
 preserved in the note for audit, while signatures remain bound to the exact commit they attest.
+Signed source records are used only if their signatures verify; invalid signed source records are
+discarded before deriving confidence, verdict, tests, or human-approval signals.
 
 ---
 

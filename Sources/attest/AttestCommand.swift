@@ -236,7 +236,11 @@ struct Forward: AsyncParsableCommand {
         let store = try repo.makeStore()
         let source = try store.resolve(revision: from)
         let target = try store.resolve(revision: to)
-        let sourceAttestations = try store.attestations(for: source).filter { $0.commit == source }
+        let sourceAttestations = try store.attestations(for: source)
+            .filter { $0.commit == source }
+            .filter { attestation in
+                !attestation.isSigned || Ed25519Verifier.isValid(attestation)
+            }
         guard !sourceAttestations.isEmpty else {
             throw AttestError.noAttestations(commit: source)
         }
@@ -278,7 +282,7 @@ struct Forward: AsyncParsableCommand {
     }
 
     private static func forwardNote(source: String, sourceAttestations: [Attestation], extra: String?) -> String {
-        let reviewers = Array(Set(sourceAttestations.map(\.reviewer))).sorted().joined(separator: ", ")
+        let reviewers = Set(sourceAttestations.map(\.reviewer)).sorted().joined(separator: ", ")
         var parts = [
             "forwarded from \(source)",
             "source records: \(sourceAttestations.count)",
