@@ -135,10 +135,16 @@ final class CLIValidationTests: XCTestCase {
             try? FileManager.default.removeItem(at: repo)
         }
         try git(["init", "-q"], cwd: repo)
+        try git(["checkout", "-q", "-B", "main"], cwd: repo)
         try git(["config", "user.email", "t@t.t"], cwd: repo)
         try git(["config", "user.name", "t"], cwd: repo)
         try git(["commit", "-q", "--allow-empty", "-m", "c1"], cwd: repo)
         return repo
+    }
+
+    private func currentHead(in repo: URL) throws -> String {
+        try run(URL(fileURLWithPath: "/usr/bin/git"), ["rev-parse", "HEAD"], cwd: repo)
+            .stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Creates an empty commit with a fixed committer/author date and returns its SHA.
@@ -311,5 +317,63 @@ final class CLIValidationTests: XCTestCase {
             result.stderr.contains("unknown revision"),
             "stderr should carry git's own explanation, got: \(result.stderr)"
         )
+    }
+
+    // MARK: - Forwarding provenance
+
+    func testForwardRecordsFreshAttestationForSquashCommit() throws {
+        let repo = try makeScratchRepo()
+        let base = try currentHead(in: repo)
+
+        try git(["checkout", "-q", "-b", "feature"], cwd: repo)
+        try "reviewed change\n".write(
+            to: repo.appendingPathComponent("feature.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try git(["add", "feature.txt"], cwd: repo)
+        try git(["commit", "-q", "-m", "feature"], cwd: repo)
+        let source = try currentHead(in: repo)
+
+        let signed = try run(
+            attestBinary,
+            ["sign", "-C", repo.path, "--commit", source, "--reviewer", "agent:claude", "--confidence", "0.9"]
+        )
+        XCTAssertEqual(signed.status, 0, "sign should succeed: \(signed.stderr)")
+
+        try git(["checkout", "-q", "main"], cwd: repo)
+        try git(["merge", "--squash", "feature"], cwd: repo)
+        try git(["commit", "-q", "-m", "squash feature"], cwd: repo)
+
+        let exact = try run(attestBinary, ["verify", "-C", repo.path, "--range", "\(base)..HEAD"], cwd: repo)
+        XCTAssertEqual(exact.status, 1, "plain verification should still require a note on the squash commit")
+
+        let forwarded = try run(
+            attestBinary,
+            ["forward", "-C", repo.path, "--from", source, "--to", "HEAD", "--reviewer", "ci:merge-bot"]
+        )
+        XCTAssertEqual(
+            forwarded.status,
+            0,
+            "forward should record a fresh target attestation: \(forwarded.stderr)"
+        )
+
+        let verified = try run(attestBinary, ["verify", "-C", repo.path, "--range", "\(base)..HEAD"], cwd: repo)
+        XCTAssertEqual(verified.status, 0, "forwarded attestation should satisfy exact verification: \(verified.stderr)")
+
+        let log = try run(attestBinary, ["log", "-C", repo.path, "--commit", "HEAD", "--json"])
+        XCTAssertTrue(log.stdout.contains("\"commit\""))
+        XCTAssertTrue(log.stdout.contains("ci:merge-bot"))
+        XCTAssertTrue(log.stdout.contains("forwarded from \(source)"))
+    }
+
+    func testForwardFailsWhenSourceHasNoAttestations() throws {
+        let repo = try makeScratchRepo()
+        let result = try run(
+            attestBinary,
+            ["forward", "-C", repo.path, "--from", "HEAD", "--to", "HEAD", "--reviewer", "ci:merge-bot"]
+        )
+        XCTAssertEqual(result.status, 1)
+        XCTAssertTrue(result.stderr.contains("No attestations found for"))
     }
 }

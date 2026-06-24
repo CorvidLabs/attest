@@ -336,6 +336,10 @@ Pin to the moving `@v0` tag to track the latest 0.x release, or to an exact tag
 |-------|---------|-------------|
 | `range` | `origin/main..HEAD` | Git range to verify (needs full history). |
 | `policy` | `.attest.json` | Path to the policy file (relative to `working-directory`). It must exist: a missing or misspelled policy fails the gate rather than silently passing under the permissive default. |
+| `forward-from` | `""` | Optional reviewed source commit to forward before verification, useful for squash merges. |
+| `forward-to` | `HEAD` | Landed commit to attest when `forward-from` is set. |
+| `forward-reviewer` | `ci:attest-forward` | Reviewer identity for the forwarded attestation. |
+| `forward-sign` | `false` | Sign the forwarded attestation with the runner's `attest keygen` key. |
 | `working-directory` | `.` | Directory to run `attest verify` in. |
 | `version` | *(action ref)* | attest release to install (`v0.3.0` or `latest`); defaults to the pinned tag, else `latest`. |
 
@@ -345,6 +349,23 @@ Pin to the moving `@v0` tag to track the latest 0.x release, or to an exact tag
 
 The gate's contract is the **exit code**: a policy violation propagates
 `attest`'s non-zero exit and fails the job.
+
+For squash-merge repositories, attest the reviewed PR head before merge, then forward that
+provenance to the squash commit in the protected-branch workflow before the normal verify step:
+
+```yaml
+- uses: CorvidLabs/attest@v0
+  with:
+    range: ${{ github.event.before }}..HEAD
+    policy: .attest.json
+    forward-from: ${{ env.REVIEWED_PR_HEAD_SHA }}
+    forward-to: HEAD
+    forward-reviewer: ci:merge-bot
+    forward-sign: true
+```
+
+Forwarding records a new attestation whose `commit` is the landed squash SHA; the reviewed source
+SHA is preserved in the note for audit. Verification remains exact-SHA verification.
 
 > **Platform.** Prebuilt binaries cover **GitHub-hosted macOS and Linux x86_64
 > runners**. Other runners (e.g. `windows-latest`, Linux arm64) need a Swift

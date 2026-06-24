@@ -1,8 +1,9 @@
 ---
 module: provenance-ledger
-version: 9
+version: 10
 status: draft
 files:
+  - Sources/attest/AttestCommand.swift
   - Sources/AttestKit/Models.swift
   - Sources/AttestKit/Canonical.swift
   - Sources/AttestKit/Ed25519Signer.swift
@@ -327,6 +328,14 @@ Two design commitments make it usable everywhere:
   discards the relocated record before any rule runs. `attest export` marks the record
   `"commitMatches": false` / `"verified": false`, and `attest log` renders it `commit-mismatch`
   with a stderr warning and a non-zero exit. The same record on its own commit A still passes.
+- For squash merges, `attest forward --from <reviewed-pr-head> --to <squash-commit>` records a
+  new attestation whose `commit` is the landed squash commit, deriving confidence, highest verdict,
+  `testsPassed`, and `humanApproved` from valid source records. The note preserves the source SHA
+  and source reviewers for audit. A protected-branch workflow then runs ordinary
+  `attest verify --range <before>..HEAD`; no verifier rule accepts a different commit merely
+  because it has an equivalent tree or diff. `--sign` signs the new target attestation with the
+  merge/CI actor's key, so `trustedKeys` / `signerPinning` can decide whether that forwarding actor
+  is trusted.
 
 ## Error Cases
 
@@ -444,3 +453,12 @@ Two design commitments make it usable everywhere:
   carry git's stderr explanation (`AttestError.git` gains a `message`; `resolve` throws the new
   `unknownRevision`), and `attest sign --sign` warns when the key file's permissions are looser
   than `0600` (`KeyStore.loosePermissions`).
+- v10: Squash-merge provenance support via post-merge re-attestation, not equivalence-based
+  verification. Adds `attest forward --from <source> --to <target>` to read valid attestations from
+  an already-reviewed source commit and record a fresh attestation whose `commit` is the landed
+  target commit. The forwarded record derives max confidence, highest verdict, tests-passed, and
+  human-approval signals from the source records; its note captures the source SHA and reviewers.
+  `--sign` signs the new target record with the merge/CI actor's key. The GitHub Action gains
+  optional `forward-from` / `forward-to` / `forward-reviewer` / `forward-sign` inputs that run
+  forwarding before the normal `attest verify` gate. This is additive and does not change canonical
+  serialization, signature verification, commit binding, or exact-SHA policy evaluation.

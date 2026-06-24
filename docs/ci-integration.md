@@ -58,12 +58,38 @@ jobs:
 |-------|---------|-------------|
 | `range` | `origin/main..HEAD` | git range to verify (needs full history). |
 | `policy` | `.attest.json` | policy file path, relative to `working-directory`. |
+| `forward-from` | `""` | optional reviewed source commit to forward before verification, useful for squash merges. |
+| `forward-to` | `HEAD` | landed commit to attest when `forward-from` is set. |
+| `forward-reviewer` | `ci:attest-forward` | reviewer identity for the forwarded attestation. |
+| `forward-sign` | `false` | sign the forwarded attestation with the runner's `attest keygen` key. |
 | `working-directory` | `.` | directory to run `attest verify` in. |
 | `version` | *(action ref)* | attest release to install (`v0.3.0` or `latest`); defaults to the pinned tag, else `latest`. |
 
 The single output is `binary` (path to the `attest` used); the gate's contract is the **exit
 code**. A policy violation propagates `attest`'s non-zero exit and fails the job. Prebuilt binaries
 cover GitHub-hosted macOS and Linux x86_64 runners; other runners need a Swift toolchain.
+
+## Squash merges
+
+Because `Attestation.commit` is part of the signed payload, a PR-head attestation cannot be moved
+onto GitHub's squash commit. The supported protected-branch workflow is post-merge
+re-attestation:
+
+```yaml
+- uses: CorvidLabs/attest@v0
+  with:
+    range: ${{ github.event.before }}..HEAD
+    policy: .attest.json
+    forward-from: ${{ env.REVIEWED_PR_HEAD_SHA }}
+    forward-to: HEAD
+    forward-reviewer: ci:merge-bot
+    forward-sign: true
+```
+
+The action runs `attest forward` first, recording a fresh attestation on `forward-to` that points
+back to `forward-from` in its note, then runs ordinary `attest verify --range ... --policy ...`.
+Use `trustedKeys` / `signerPinning` to decide whether the merge CI key is trusted to make that
+forwarding statement.
 
 > **Honest scope.** The action builds `attest` from *its own* checkout with `swift build -c
 > release`. Cross-repo packaging (shipping a prebuilt binary and installing it into other repos

@@ -1,11 +1,11 @@
 ---
 title: "CLI reference"
-description: "Every attest command and flag: sign, verify, log, export, keygen, with examples and exit codes."
+description: "Every attest command and flag: sign, forward, verify, log, export, keygen, with examples and exit codes."
 section: "Reference"
 order: 2
 ---
 
-`attest` has five subcommands: `sign`, `verify`, `log`, `export`, and `keygen`. The default
+`attest` has six subcommands: `sign`, `forward`, `verify`, `log`, `export`, and `keygen`. The default
 subcommand (running `attest` with no subcommand) is `log`.
 
 All commands that touch a repository accept `--path <dir>` / `-C <dir>` (default `.`) to point at
@@ -46,7 +46,7 @@ attest log --json                       # JSON is always plain
 | Command | Exit 0 | Exit 1 | Other non-zero |
 |---------|--------|--------|----------------|
 | `verify` | every checked commit passes the policy | a commit violates the policy | usage / git / I/O error |
-| `sign`, `log`, `export`, `keygen` | success | n/a | usage / git / I/O error |
+| `sign`, `forward`, `log`, `export`, `keygen` | success | n/a | usage / git / I/O error |
 
 `attest verify`'s exit code is its contract: a policy violation propagates exit `1`, which is what
 CI and agent loops gate on. The other commands exit non-zero only on an actual error (invalid
@@ -89,6 +89,29 @@ Reads `augur check --json` from a file or `-` (stdin) and merges it: augur's `ve
 and its `riskScore` (0…100) becomes `confidence = 1 − riskScore/100` (so risk 45 → confidence
 0.55). See [Signing & identity](/attest/docs/signing) and the project README for the full augur
 pipeline.
+
+## `attest forward`
+
+Record a fresh attestation on a landed commit from an already-attested source commit. This is the
+recommended squash-merge workflow: attest the reviewed PR head, squash merge, forward that
+provenance onto the protected-branch commit, then run normal exact verification.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--from <rev>` | none | reviewed source commit whose attestations are being forwarded. |
+| `--to <rev>` | `HEAD` | landed commit to attest. |
+| `--reviewer <id>` | `ci:attest-forward` | identity recording the forwarding attestation, e.g. `ci:merge-bot`. |
+| `--note <text>` | none | optional text appended to the forwarding note. |
+| `--sign` | off | sign the forwarded attestation with the key from `attest keygen`. |
+| `--json` | off | emit the stored attestation as JSON. |
+
+```sh
+attest forward --from "$PR_HEAD_SHA" --to HEAD --reviewer ci:merge-bot --sign
+attest verify --range "$BEFORE..HEAD" --policy .attest.json
+```
+
+The forwarded record's `commit` is the landed commit SHA. The source SHA and source reviewers are
+preserved in the note for audit, while signatures remain bound to the exact commit they attest.
 
 ## `attest verify`
 
