@@ -1,8 +1,9 @@
 ---
 module: provenance-ledger
-version: 9
+version: 10
 status: draft
 files:
+  - Sources/attest/AttestCommand.swift
   - Sources/AttestKit/Models.swift
   - Sources/AttestKit/Canonical.swift
   - Sources/AttestKit/Ed25519Signer.swift
@@ -327,6 +328,16 @@ Two design commitments make it usable everywhere:
   discards the relocated record before any rule runs. `attest export` marks the record
   `"commitMatches": false` / `"verified": false`, and `attest log` renders it `commit-mismatch`
   with a stderr warning and a non-zero exit. The same record on its own commit A still passes.
+- For squash merges, `attest forward --from <reviewed-pr-head> --to <squash-commit>` records a
+  new attestation whose `commit` is the landed squash commit, deriving confidence, highest verdict,
+  `testsPassed`, and `humanApproved` from valid source records. A source record is valid for
+  forwarding only when its inner `commit` matches the source commit and, if signed, its signature
+  verifies; invalid signed records are discarded so their claims cannot be laundered into a new
+  merge/CI attestation. The note preserves the source SHA and source reviewers for audit. A
+  protected-branch workflow then runs ordinary `attest verify --range <before>..HEAD`; no verifier
+  rule accepts a different commit merely because it has an equivalent tree or diff. `--sign` signs
+  the new target attestation with the merge/CI actor's key, so `trustedKeys` / `signerPinning` can
+  decide whether that forwarding actor is trusted.
 
 ## Error Cases
 
@@ -336,6 +347,8 @@ Two design commitments make it usable everywhere:
   own explanation.
 - `AttestError.unknownRevision(revision)` — `NotesStore.resolve(revision:)` could not resolve
   the revision to a commit.
+- `AttestError.noAttestations(commit:)` — a command that requires source provenance, such as
+  `attest forward --from <commit>`, found no usable attestations for that commit.
 - `AttestError.malformedRecord(detail)` — a stored note line is not valid attestation JSON.
 - `AttestError.policyNotFound(path)` — `Policy.load(fromFile:)` over a path that does not exist
   (e.g. an explicitly passed `--policy` that was typo'd).
@@ -444,3 +457,14 @@ Two design commitments make it usable everywhere:
   carry git's stderr explanation (`AttestError.git` gains a `message`; `resolve` throws the new
   `unknownRevision`), and `attest sign --sign` warns when the key file's permissions are looser
   than `0600` (`KeyStore.loosePermissions`).
+- v10: Squash-merge provenance support via post-merge re-attestation, not equivalence-based
+  verification. Adds `attest forward --from <source> --to <target>` to read valid attestations from
+  an already-reviewed source commit and record a fresh attestation whose `commit` is the landed
+  target commit. The forwarded record derives max confidence, highest verdict, tests-passed, and
+  human-approval signals from usable source records only: the source record must name the source
+  commit, and any signed source record must verify before it can contribute. Its note captures the
+  source SHA and reviewers. `--sign` signs the new target record with the merge/CI actor's key. The
+  GitHub Action gains optional `forward-from` / `forward-to` / `forward-reviewer` / `forward-sign`
+  inputs that run forwarding before the normal `attest verify` gate. This is additive and does not
+  change canonical serialization, signature verification, commit binding, or exact-SHA policy
+  evaluation.

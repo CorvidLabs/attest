@@ -17,6 +17,24 @@ inputs:
     description: "Path to the policy file, relative to working-directory."
     required: false
     default: ".attest.json"
+  forward-from:
+    description: >-
+      Optional reviewed source commit whose provenance should be forwarded to
+      the landed commit before verification.
+    required: false
+    default: ""
+  forward-to:
+    description: "Landed commit to attest when forward-from is set."
+    required: false
+    default: "HEAD"
+  forward-reviewer:
+    description: "Reviewer identity to record on the forwarded attestation."
+    required: false
+    default: "ci:attest-forward"
+  forward-sign:
+    description: "Whether to sign the forwarded attestation with the runner's attest key."
+    required: false
+    default: "false"
   working-directory:
     description: "Directory to run attest in (the repository to verify)."
     required: false
@@ -168,6 +186,17 @@ runs:
         ATTEST: ${{ steps.install.outputs.binary }}
         RANGE: ${{ inputs.range }}
         POLICY: ${{ inputs.policy }}
+        FORWARD_FROM: ${{ inputs.forward-from }}
+        FORWARD_TO: ${{ inputs.forward-to }}
+        FORWARD_REVIEWER: ${{ inputs.forward-reviewer }}
+        FORWARD_SIGN: ${{ inputs.forward-sign }}
       run: |
         set -euo pipefail
+        if [ -n "$FORWARD_FROM" ]; then
+          forward_args=(forward --from "$FORWARD_FROM" --to "$FORWARD_TO" --reviewer "$FORWARD_REVIEWER")
+          if [ "$FORWARD_SIGN" = "true" ]; then
+            forward_args+=(--sign)
+          fi
+          "$ATTEST" "${forward_args[@]}"
+        fi
         "$ATTEST" verify --range "$RANGE" --policy "$POLICY"

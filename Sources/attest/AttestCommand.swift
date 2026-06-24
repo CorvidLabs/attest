@@ -17,7 +17,7 @@ struct AttestCommand: AsyncParsableCommand {
         and agent loops gate on the recorded trust.
         """,
         version: "0.4.0",
-        subcommands: [Sign.self, Verify.self, Log.self, Export.self, Keygen.self],
+        subcommands: [Sign.self, Forward.self, Verify.self, Log.self, Export.self, Keygen.self],
         defaultSubcommand: Log.self
     )
 }
@@ -202,6 +202,98 @@ struct Sign: AsyncParsableCommand {
             raw = try String(contentsOfFile: source, encoding: .utf8)
         }
         return try AugurVerdict.parse(raw)
+    }
+}
+
+// MARK: - forward
+
+struct Forward: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Record a fresh attestation on a landed commit from an already-attested source commit."
+    )
+
+    @OptionGroup var repo: RepoOptions
+
+    @Option(name: .long, help: "The reviewed source commit whose attestations are being forwarded.")
+    var from: String
+
+    @Option(name: .long, help: "The landed commit to attest. Defaults to HEAD.")
+    var to: String = "HEAD"
+
+    @Option(name: .long, help: "Who is forwarding provenance, e.g. 'ci:merge-bot'.")
+    var reviewer: String = "ci:attest-forward"
+
+    @Option(name: .long, help: "An optional free-text note appended to the forwarding note.")
+    var note: String?
+
+    @Flag(name: .long, help: "Sign the forwarded attestation with the key from `attest keygen`.")
+    var sign = false
+
+    @Flag(name: .long, help: "Emit the stored attestation as JSON.")
+    var json = false
+
+    func run() async throws {
+        let store = try repo.makeStore()
+        let source = try store.resolve(revision: from)
+        let target = try store.resolve(revision: to)
+        let sourceAttestations = try store.attestations(for: source)
+            .filter { $0.commit == source }
+            .filter { attestation in
+                !attestation.isSigned || Ed25519Verifier.isValid(attestation)
+            }
+        guard !sourceAttestations.isEmpty else {
+            throw AttestError.noAttestations(commit: source)
+        }
+
+        // Forwarding composes a source set into one landed-commit statement:
+        // strongest confidence, most severe verdict, and any positive test/human signal.
+        let forwarded = Attestation(
+            commit: target,
+            reviewer: reviewer,
+            confidence: sourceAttestations.map(\.confidence).max() ?? 0,
+            verdict: sourceAttestations.compactMap(\.verdict).max(),
+            testsPassed: sourceAttestations.contains { $0.testsPassed },
+            humanApproved: sourceAttestations.contains { $0.humanApproved },
+            timestamp: Int(Date().timeIntervalSince1970),
+            note: Self.forwardNote(source: source, sourceAttestations: sourceAttestations, extra: note)
+        )
+
+        var signer: Ed25519Signer?
+        if sign {
+            let keyStore = KeyStore()
+            if let permissions = keyStore.loosePermissions {
+                warn(
+                    "attest forward: warning: signing key \(keyStore.path) has permissions "
+                        + "0\(String(permissions, radix: 8)) (expected 0600); "
+                        + "run `chmod 600 \(keyStore.path)` to restrict it"
+                )
+            }
+            signer = try keyStore.load()
+        }
+
+        let stored = try Attest(store: store).record(forwarded, signer: signer)
+        if json {
+            print(try stored.jsonString())
+        } else {
+            let signedNote = stored.isSigned ? " (signed)" : ""
+            print(
+                "attest · forwarded \(String(source.prefix(10))) to "
+                    + "\(String(target.prefix(10))) as \(reviewer)\(signedNote)"
+            )
+        }
+    }
+
+    private static func forwardNote(source: String, sourceAttestations: [Attestation], extra: String?) -> String {
+        let reviewers = Set(sourceAttestations.map(\.reviewer)).sorted().joined(separator: ", ")
+        var parts = [
+            "forwarded from \(source)",
+            "source records: \(sourceAttestations.count)",
+            "source reviewers: \(reviewers)"
+        ]
+        if let extra, !extra.isEmpty {
+            parts.append(extra)
+        }
+        return parts.joined(separator: "; ")
     }
 }
 
