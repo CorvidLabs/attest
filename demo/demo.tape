@@ -23,11 +23,11 @@ Type "attest sign --reviewer human:leif --confidence 0.92 --tests-passed --sign"
 Sleep 400ms
 Enter
 Sleep 1500ms
-Type "attest log"
+Type "attest log --color always"
 Sleep 400ms
 Enter
 Sleep 2500ms
-Type "attest verify --policy release.json"
+Type "attest verify --color always --policy release.json"
 Sleep 400ms
 Enter
 Sleep 3500ms

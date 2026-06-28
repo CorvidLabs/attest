@@ -7,7 +7,10 @@ so anyone can reproduce it from scratch:
   commit, a `release.json` policy (signature + passing tests required), and ensures
   a signing key exists.
 - `demo.tape` is a [VHS](https://github.com/charmbracelet/vhs) script that records
-  `attest sign` -> `attest log` -> `attest verify` as a GIF.
+  `attest sign` -> `attest log` -> `attest verify` as a GIF. It passes
+  `--color always` to human-readable commands because VHS capture is not always
+  detected as an interactive TTY, and `--color auto` intentionally stays plain
+  when stdout is not a terminal.
 
 ## Regenerate
 
