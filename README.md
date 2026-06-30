@@ -555,12 +555,12 @@ The full signed lifecycle (`keygen` → `--sign` → `signed[ok]` → `verify` a
 - **macOS and Linux.** CI runs on both platforms (`build-test-macos` and
   `build-test-linux`). The Homebrew prebuilt binary and the composite `action.yml`
   currently target macOS. Windows is out of scope.
-- The composite action (`action.yml`) builds `attest` from its own checkout.
-  **Cross-repo packaging** (shipping a prebuilt binary and installing it into
-  other repos without a Swift toolchain) is a deferred later step.
+- The composite action (`action.yml`) installs a prebuilt `attest` binary on
+  GitHub-hosted macOS and Linux x86_64 runners (no Swift toolchain required) and
+  falls back to building from its own checkout on other platforms. Prebuilt
+  binaries for additional targets (e.g. arm64 Linux, Windows) are a roadmap item.
 - `attest` uses a single local Ed25519 key and embeds the public key on each
-  record. It is not a CA: key distribution / web-of-trust and signer pinning are
-  roadmap items.
+  record. It is not a CA: key distribution / web-of-trust are roadmap items.
 
 ## License
 
