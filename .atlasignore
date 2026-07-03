@@ -1,0 +1,8 @@
+# attest coverage scope: the specs govern the library Sources, not these.
+
+# Tests are verified against the specs, not governed by them.
+Tests/
+
+# The marketing site and the SwiftPM manifest are out of the coverage scope.
+site/
+Package.swift
