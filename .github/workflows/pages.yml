@@ -65,6 +65,24 @@ jobs:
         working-directory: site
         run: bun install --frozen-lockfile
 
+      # Cache the compiled fledge-atlas CLI so the badge step is a fast no-op on a
+      # cache hit instead of a ~3-5 min cargo build. Keyed to the exact commit the
+      # `v1` tag resolves to, so moving v1 invalidates the cache automatically and
+      # the next run rebuilds + re-caches. On a hit, cargo install sees the binary
+      # already installed at that commit and skips the build.
+      - name: Resolve pinned atlas commit (cache key)
+        id: atlasref
+        run: echo "sha=$(git ls-remote https://github.com/CorvidLabs/fledge-plugin-atlas v1 | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the fledge-atlas CLI
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/fledge-atlas
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: fledge-atlas-${{ runner.os }}-${{ steps.atlasref.outputs.sha }}
+
       # Render attest's own spec-coverage badges + SVG cards from the atlas, into
       # site/public/badges so the Astro build copies them into the deployed site
       # (served at corvidlabs.github.io/attest/badges/). .atlasignore scopes the
@@ -91,7 +109,17 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
-      - id: deployment
+      # GitHub Pages' backend occasionally returns a transient "Deployment failed,
+      # try again later" during the status check. Attempt once, then retry once so
+      # a flake does not leave the badges stale until the next push.
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Deploy to GitHub Pages (retry transient failures)
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
