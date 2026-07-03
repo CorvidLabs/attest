@@ -35,6 +35,9 @@ on:
       - 'site/**'
       - '.github/workflows/pages.yml'
       - 'CHANGELOG.md'   # the header version badge reads from here, so rebuild on release
+      - 'Sources/**'     # atlas spec-coverage badge tracks the source tree
+      - 'specs/**'       # ...and the specs that govern it
+      - '.atlasignore'   # ...and the coverage scope
   workflow_dispatch:
 
 concurrency:
@@ -61,6 +64,17 @@ jobs:
       - name: Install dependencies
         working-directory: site
         run: bun install --frozen-lockfile
+
+      # Render attest's own spec-coverage badges + SVG cards from the atlas, into
+      # site/public/badges so the Astro build copies them into the deployed site
+      # (served at corvidlabs.github.io/attest/badges/). .atlasignore scopes the
+      # coverage to the library Sources.
+      - name: Render atlas coverage badges
+        uses: CorvidLabs/fledge-plugin-atlas@v1
+        with:
+          path: .
+          output-dir: site/public/badges
+          components: "coverage langmix treemap sunburst"
 
       - name: Build site
         working-directory: site
