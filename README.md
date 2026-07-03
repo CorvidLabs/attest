@@ -4,6 +4,7 @@
 
 [![attest](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/attest/badge.json)](https://corvidlabs.github.io/attest/)
 [![CI](https://github.com/CorvidLabs/attest/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/attest/actions/workflows/ci.yml)
+[![spec coverage](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/attest/badges/coverage.json)](https://corvidlabs.github.io/attest/)
 [![docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Fattest-blue)](https://corvidlabs.github.io/attest/)
 
 <p align="center">
