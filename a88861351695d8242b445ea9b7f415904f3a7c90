@@ -1,0 +1,1 @@
+{"commit":"a88861351695d8242b445ea9b7f415904f3a7c90","confidence":0.9,"humanApproved":false,"note":"CI: swift build + swift test + fledge spec check all green","reviewer":"agent:ci","testsPassed":true,"timestamp":1783461086,"verdict":"proceed"}
