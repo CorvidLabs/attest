@@ -41,8 +41,8 @@ inputs:
     default: "."
   version:
     description: >-
-      attest release to install (e.g. v0.3.0), or "latest". Defaults to the ref
-      this action was pinned to when that is a release tag, otherwise "latest".
+      attest release to install (e.g. 0.3.0 or v0.3.0), or "latest". Defaults to the
+      ref this action was pinned to when that is a release tag, otherwise "latest".
     required: false
     default: ""
 
@@ -71,10 +71,10 @@ runs:
         # Resolve which release to install, WITHOUT ever crossing a major
         # boundary. An explicit `version` wins; otherwise derive from the ref the
         # action was pinned to:
-        #   @v0.3.0           -> install exactly v0.3.0
-        #   @v0               -> newest v0.* release (the moving major tag has no
+        #   @0.3.0 / @v0.3.0 -> install exactly that release
+        #   @1 / @v1          -> newest 1.* release (the moving major tag has no
         #                        release of its own, so resolve it to a concrete
-        #                        v0.* tag; a future v1 `latest` can never leak in)
+        #                        1.* tag; a future 2 `latest` can never leak in)
         #   branch / sha      -> install the latest release
         # A requested tag with no matching asset does NOT silently fall back to a
         # different version; `bin` stays empty and we build from source below.
@@ -83,9 +83,9 @@ runs:
         target=""       # concrete release tag when mode=tag
         if [ -n "$ver" ]; then
           if [ "$ver" = "latest" ]; then mode="latest"; else mode="tag"; target="$ver"; fi
-        elif printf '%s' "$ACTION_REF" | grep -Eq '^v[0-9]+$'; then
-          # Moving major tag (e.g. v0): pick the newest release within that major.
-          # gh lists newest-first, so the first v<major>.* tag is the latest one.
+        elif printf '%s' "$ACTION_REF" | grep -Eq '^v?[0-9]+$'; then
+          # Moving major tag (e.g. 1 or v1): pick the newest release within that major.
+          # gh lists newest-first, so the first <major>.* tag is the latest one.
           major="$ACTION_REF"
           # `// empty` so an empty match yields "" (not the string "null", which
           # would be non-empty and trigger a bogus `gh release download null`).
@@ -100,7 +100,7 @@ runs:
             mode="none"
             echo "::warning::No published ${major}.* release found; building from source."
           fi
-        elif printf '%s' "$ACTION_REF" | grep -Eq '^v[0-9]+\.[0-9]'; then
+        elif printf '%s' "$ACTION_REF" | grep -Eq '^v?[0-9]+\.[0-9]'; then
           mode="tag"; target="$ACTION_REF"   # full release tag
         fi
 

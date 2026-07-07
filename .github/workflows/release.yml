@@ -41,8 +41,8 @@ jobs:
           # On a tag push, github.ref_name is the tag. On workflow_dispatch from
           # a tag it is also the tag; from a branch it is the branch name, which
           # we reject so a manual run never uploads to a bogus "release".
-          if ! [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Expected a semver tag like v0.2.0, got '$REF_NAME'. Run this from a tag."
+          if ! [[ "$REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Expected a semver tag like 0.2.0 or v0.2.0, got '$REF_NAME'. Run this from a tag."
             exit 1
           fi
           echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
@@ -157,8 +157,8 @@ jobs:
         run: |
           set -euo pipefail
           # Reject branch names so a manual run never uploads to a bogus release.
-          if ! [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Expected a semver tag like v0.2.0, got '$REF_NAME'. Run this from a tag."
+          if ! [[ "$REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Expected a semver tag like 0.2.0 or v0.2.0, got '$REF_NAME'. Run this from a tag."
             exit 1
           fi
           echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
@@ -183,12 +183,13 @@ jobs:
             --clobber
 
   move-major-tag:
-    name: Move the major (v0) tag
+    name: Move the major tag
     runs-on: ubuntu-latest
-    # Only after both binaries are published, so `@v0` never points at a commit
-    # whose release lacks assets. Force-updates the major tag (v0 for v0.x.y) to
-    # this release's commit, so consumers can pin `uses: CorvidLabs/attest@v0`
-    # and track the latest 0.x without editing their workflow.
+    # Only after both binaries are published, so the major tag never points at a
+    # commit whose release lacks assets. Force-updates the major tag (1 for 1.x.y
+    # or v1 for v1.x.y) to this release's commit, so consumers can pin
+    # `uses: CorvidLabs/attest@1` or `@v1` and track the latest release without
+    # editing their workflow.
     needs: [build, upload-linux]
     permissions:
       contents: write
