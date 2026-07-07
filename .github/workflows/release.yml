@@ -202,10 +202,12 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Derive the major tag from the release tag: v0.3.0 -> v0, v1.2.3 -> v1.
+          # Derive the major tag from the release tag.
+          # v0.3.0 -> v0 | v1.2.3 -> v1 | 1.0.0 -> 1 | 2.3.4 -> 2
           major="${REF_NAME%%.*}"
           case "$major" in
-            v[0-9]*) ;;
+            v[0-9]*) ;; # v-prefixed: v0, v1, ...
+            [0-9]*)  ;; # bare: 1, 2, ...
             *) echo "::error::Unexpected tag '$REF_NAME'; cannot derive a major tag."; exit 1 ;;
           esac
           echo "Pointing $major at $GITHUB_SHA (from $REF_NAME)."
