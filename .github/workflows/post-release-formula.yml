@@ -24,7 +24,7 @@ on:
 
 jobs:
   update-formula:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && (startsWith(github.event.workflow_run.head_branch, 'v') || contains('0123456789', substring(github.event.workflow_run.head_branch, 0, 1))) }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,8 +38,12 @@ jobs:
         run: |
           set -euo pipefail
           if ! [[ "$HEAD_BRANCH" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Refusing to run with non-semver tag '$HEAD_BRANCH'"
-            exit 1
+            echo "::notice::Skipping non-semver ref '$HEAD_BRANCH'; formula update only runs for release tags."
+            {
+              echo "tag="
+              echo "version="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           {
             echo "tag=$HEAD_BRANCH"
@@ -48,6 +52,7 @@ jobs:
 
       - name: Fetch sha256 sidecars from release
         id: shas
+        if: ${{ steps.tag.outputs.tag != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -70,6 +75,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Sync formula to homebrew-tap
+        if: ${{ steps.tag.outputs.tag != '' }}
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           NEW_VERSION: ${{ steps.tag.outputs.version }}
