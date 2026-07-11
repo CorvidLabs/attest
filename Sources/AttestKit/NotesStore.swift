@@ -125,10 +125,19 @@ public struct NotesStore: AttestationStore {
     /// discarded implicitly.
     /// - Parameter remote: The configured git remote name.
     public func push(remote: String = "origin") throws {
+        let localRef = "refs/notes/\(Self.ref)"
+        let existingRef = try run(["show-ref", "--verify", localRef], allowFailure: true)
+        guard !existingRef.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AttestError.git(
+                command: "push",
+                status: 1,
+                message: "Local attestation ledger '\(localRef)' does not exist. Record an attestation first."
+            )
+        }
         try run([
             "push",
             remote,
-            "refs/notes/\(Self.ref):refs/notes/\(Self.ref)",
+            "\(localRef):\(localRef)",
         ])
     }
 
@@ -138,14 +147,23 @@ public struct NotesStore: AttestationStore {
     /// `cat_sort_uniq`, preserving attestations added independently on both
     /// sides. The temporary ref is deleted whether the merge succeeds or fails.
     /// - Parameter remote: The configured git remote name.
-    public func fetch(remote: String = "origin") throws {
+    /// - Returns: `true` when a remote ledger was fetched and merged, or `false`
+    ///   when the remote does not have an attestation ledger yet.
+    @discardableResult
+    public func fetch(remote: String = "origin") throws -> Bool {
+        let remoteRef = "refs/notes/\(Self.ref)"
+        let existingRef = try run(["ls-remote", remote, remoteRef])
+        guard !existingRef.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+
         let temporaryRef = "refs/notes/attest-fetch-\(UUID().uuidString)"
         defer { _ = try? run(["update-ref", "-d", temporaryRef], allowFailure: true) }
 
         try run([
             "fetch",
             remote,
-            "refs/notes/\(Self.ref):\(temporaryRef)",
+            "\(remoteRef):\(temporaryRef)",
         ])
         try run([
             "notes",
@@ -155,6 +173,7 @@ public struct NotesStore: AttestationStore {
             "cat_sort_uniq",
             temporaryRef,
         ])
+        return true
     }
 
     // MARK: - Process

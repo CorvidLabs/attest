@@ -22,6 +22,17 @@ internal final class NotesSyncTests: XCTestCase {
 
         let firstStore = NotesStore(path: firstClone.path)
         let commit = try firstStore.resolve(revision: "HEAD")
+        XCTAssertFalse(try firstStore.fetch())
+        XCTAssertThrowsError(try firstStore.push()) { error in
+            XCTAssertEqual(
+                error as? AttestError,
+                .git(
+                    command: "push",
+                    status: 1,
+                    message: "Local attestation ledger 'refs/notes/attest' does not exist. Record an attestation first."
+                )
+            )
+        }
         try firstStore.append(attestation(commit: commit, reviewer: "agent:first", timestamp: 1))
         try firstStore.push()
 

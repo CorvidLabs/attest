@@ -85,8 +85,11 @@ internal struct FetchLedger: AsyncParsableCommand {
 
     internal func run() async throws {
         let store = try repo.makeStore()
-        try store.fetch(remote: remote)
-        print("Fetched and merged refs/notes/attest from \(remote).")
+        if try store.fetch(remote: remote) {
+            print("Fetched and merged refs/notes/attest from \(remote).")
+        } else {
+            print("Remote ledger refs/notes/attest does not exist on \(remote). Nothing to fetch.")
+        }
     }
 }
 
