@@ -13,6 +13,7 @@
 - R5: Evaluate a JSON policy (`.attest.json`) over a commit range and report violations.
 - R6: Provide a `verify` mode that exits non-zero on any policy violation (CI / agent gating).
 - R7: Provide stable, sorted-key JSON output for agent consumption on every command.
+- R8: Synchronize `refs/notes/attest` through non-forced push and merge-preserving fetch commands.
 
 ## Non-functional
 

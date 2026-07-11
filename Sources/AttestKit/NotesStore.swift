@@ -118,6 +118,45 @@ public struct NotesStore: AttestationStore {
             .filter { !$0.isEmpty }
     }
 
+    /// Pushes the attestation ledger to a git remote.
+    ///
+    /// The push is intentionally non-forced. If the remote ledger has advanced,
+    /// callers must fetch and merge it before retrying so provenance is never
+    /// discarded implicitly.
+    /// - Parameter remote: The configured git remote name.
+    public func push(remote: String = "origin") throws {
+        try run([
+            "push",
+            remote,
+            "refs/notes/\(Self.ref):refs/notes/\(Self.ref)",
+        ])
+    }
+
+    /// Fetches and merges the attestation ledger from a git remote.
+    ///
+    /// The remote ref is fetched into a unique temporary ref and merged with
+    /// `cat_sort_uniq`, preserving attestations added independently on both
+    /// sides. The temporary ref is deleted whether the merge succeeds or fails.
+    /// - Parameter remote: The configured git remote name.
+    public func fetch(remote: String = "origin") throws {
+        let temporaryRef = "refs/notes/attest-fetch-\(UUID().uuidString)"
+        defer { _ = try? run(["update-ref", "-d", temporaryRef], allowFailure: true) }
+
+        try run([
+            "fetch",
+            remote,
+            "refs/notes/\(Self.ref):\(temporaryRef)",
+        ])
+        try run([
+            "notes",
+            "--ref=\(Self.ref)",
+            "merge",
+            "-s",
+            "cat_sort_uniq",
+            temporaryRef,
+        ])
+    }
+
     // MARK: - Process
 
     @discardableResult

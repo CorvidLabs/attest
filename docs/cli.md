@@ -1,7 +1,7 @@
 # CLI Reference
 
-`attest` has six subcommands: `sign`, `forward`, `verify`, `log`, `export`, and `keygen`. The default
-subcommand (running `attest` with no subcommand) is `log`.
+`attest` has eight subcommands: `sign`, `forward`, `verify`, `log`, `export`, `keygen`, `push`, and
+`fetch`. The default subcommand (running `attest` with no subcommand) is `log`.
 
 All commands that touch a repository accept `--path <dir>` / `-C <dir>` (default `.`) to point at
 the repository to operate on.
@@ -15,7 +15,7 @@ attest <subcommand> [options]
 | Command | Exit 0 | Exit 1 | Other non-zero |
 |---------|--------|--------|----------------|
 | `verify` | every checked commit passes the policy | a commit violates the policy | usage / git / I/O error |
-| `sign`, `forward`, `log`, `export`, `keygen` | success | n/a | usage / git / I/O error |
+| `sign`, `forward`, `log`, `export`, `keygen`, `push`, `fetch` | success | n/a | usage / git / I/O error |
 
 `attest verify`'s exit code is its contract: a policy violation propagates exit `1`, which is
 what CI and agent loops gate on. The other commands exit non-zero only on an actual error
@@ -208,3 +208,23 @@ attest keygen
 The private key is written to `$XDG_CONFIG_HOME/attest/key` (or `~/.config/attest/key`) with
 `0600` permissions. `keygen` prints the **public** key to copy into a policy's `signerPinning` /
 `trustedKeys`. See [signing.md](signing.md).
+
+---
+
+## `attest push` / `attest fetch`
+
+Synchronize the provenance ledger without memorizing git-notes refspecs.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--remote <name>` | `origin` | configured git remote to push to or fetch from. |
+
+```sh
+attest fetch                 # merge remote provenance into the local ledger
+attest push                  # publish the local ledger after recording
+attest fetch --remote upstream
+```
+
+`push` is never forced: if the remote ledger advanced, it fails rather than discarding records.
+Run `attest fetch` to merge the remote records, then retry. `fetch` uses a temporary ref and the
+git-notes `cat_sort_uniq` strategy so attestations added independently on both sides survive.

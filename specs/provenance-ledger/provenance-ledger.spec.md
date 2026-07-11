@@ -1,6 +1,6 @@
 ---
 module: provenance-ledger
-version: 10
+version: 11
 status: draft
 files:
   - Sources/attest/AttestCommand.swift
@@ -89,6 +89,8 @@ Two design commitments make it usable everywhere:
 | `NotesStore.commits(inRange:)` | The commit SHAs in a range, oldest first. |
 | `NotesStore.attestedCommits()` | Every attested commit in history order, newest first (`rev-list --no-walk=sorted`), not SHA order. |
 | `NotesStore.lenientAttestations(for:)` | A commit's readable attestations plus a count of malformed note lines, so one corrupt line cannot hide the valid records beside it. |
+| `NotesStore.push(remote:)` | Non-forced push of `refs/notes/attest`; divergent remote history fails instead of being overwritten. |
+| `NotesStore.fetch(remote:)` | Fetch the remote ledger to a temporary ref and merge with `cat_sort_uniq`, preserving divergent records. |
 | `InMemoryStore` | A thread-safe in-memory `AttestationStore` for tests and dry runs. |
 | `AttestationCodec.encodeLine(_:)` / `decodeLines(_:)` | JSON-Lines encode/decode for a note body; `decodeLines` throws on any malformed line. |
 | `AttestationCodec.decodeLinesLeniently(_:)` | JSON-Lines decode that collects valid records and counts malformed lines instead of throwing. |
@@ -468,3 +470,8 @@ Two design commitments make it usable everywhere:
   inputs that run forwarding before the normal `attest verify` gate. This is additive and does not
   change canonical serialization, signature verification, commit binding, or exact-SHA policy
   evaluation.
+- v11: Safe ledger synchronization. Adds `NotesStore.push(remote:)` and `attest push` as a
+  deliberately non-forced notes-ref push. Adds `NotesStore.fetch(remote:)` and `attest fetch`,
+  which fetch into a unique temporary ref and merge with `cat_sort_uniq` so independently added
+  attestations survive. Temporary refs are removed on success and failure. This does not change
+  record encoding, canonical serialization, signatures, or policy evaluation.

@@ -47,7 +47,7 @@
 
 ## Next
 
-- [ ] `attest push` / `attest fetch` wrappers for `refs/notes/attest` syncing.
+- [x] `attest push` / `attest fetch` wrappers for safe `refs/notes/attest` synchronization.
 - [ ] `attest verify --require-key <pub>` CLI flag (the policy now expresses key trust via `trustedKeys` / `signerPinning`; a per-invocation flag is still convenient).
 - [ ] Linux/Windows CI matrix (core is macOS-targeted today).
 - [ ] Optional revocation / supersede semantics for attestations.

@@ -86,7 +86,7 @@ attest verify · [x] FAIL (1 commit checked)
 **Where next:**
 
 - [Documentation site](https://corvidlabs.github.io/attest/): the rendered docs.
-- [`docs/cli.md`](docs/cli.md): every command and flag (`sign`, `verify`, `log`, `export`, `keygen`).
+- [`docs/cli.md`](docs/cli.md): every command and flag, including ledger synchronization.
 - [`docs/policy.md`](docs/policy.md): every policy rule with JSON examples.
 - [`docs/signing.md`](docs/signing.md): keys, Ed25519, signing, and preventing reviewer spoofing.
 - [`examples/README.md`](examples/README.md): the full catalog of live examples.
@@ -107,7 +107,7 @@ context is lost the moment the PR merges. `attest` is that missing primitive:
   a confidence (`0...1`), an optional verdict (`proceed`/`review`/`block`), tests-passed and
   human-approved flags, a timestamp, and an optional note.
 - **Storage** is git notes under `refs/notes/attest`. No service, no database. Multiple
-  attestations can accrue on one commit. Sync them with `git push origin "refs/notes/*"`.
+  attestations can accrue on one commit. Sync them safely with `attest push` and `attest fetch`.
 - **Signing is optional.** Out of the box, attestations are unsigned but valid. Run
   `attest keygen` once and pass `--sign` to attach an Ed25519 signature over a deterministic
   canonical serialization (sorted keys, signature field excluded) that anyone can verify.

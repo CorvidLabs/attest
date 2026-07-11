@@ -45,6 +45,12 @@ deterministic canonical bytes.
 |------|---------|
 | `testReplayedSignedAttestationFailsStrictPolicyOnTargetCommit` | Against a temp repo: a signed record for commit A, copied verbatim onto commit B's note, no longer passes B's strict policy (`attest verify` exits 1); `attest log` renders `commit-mismatch` with a stderr warning and exit 1; the record on its own commit A still passes. |
 
+## Ledger synchronization (Tests/AttestKitTests/NotesSyncTests.swift)
+
+| Test | Asserts |
+|------|---------|
+| `testFetchMergesDivergentLedgersAndCleansTemporaryRef` | Two clones add records independently; push plus fetch preserves all records and removes the temporary fetch ref. |
+
 ## Manual / dogfood
 
 - `examples/01-basic-attestation.sh` — init a scratch repo, sign, log.
