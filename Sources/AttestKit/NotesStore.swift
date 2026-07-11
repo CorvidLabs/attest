@@ -118,6 +118,64 @@ public struct NotesStore: AttestationStore {
             .filter { !$0.isEmpty }
     }
 
+    /// Pushes the attestation ledger to a git remote.
+    ///
+    /// The push is intentionally non-forced. If the remote ledger has advanced,
+    /// callers must fetch and merge it before retrying so provenance is never
+    /// discarded implicitly.
+    /// - Parameter remote: The configured git remote name.
+    public func push(remote: String = "origin") throws {
+        let localRef = "refs/notes/\(Self.ref)"
+        let existingRef = try run(["show-ref", "--verify", localRef], allowFailure: true)
+        guard !existingRef.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AttestError.git(
+                command: "push",
+                status: 1,
+                message: "Local attestation ledger '\(localRef)' does not exist. Record an attestation first."
+            )
+        }
+        try run([
+            "push",
+            remote,
+            "\(localRef):\(localRef)",
+        ])
+    }
+
+    /// Fetches and merges the attestation ledger from a git remote.
+    ///
+    /// The remote ref is fetched into a unique temporary ref and merged with
+    /// `cat_sort_uniq`, preserving attestations added independently on both
+    /// sides. The temporary ref is deleted whether the merge succeeds or fails.
+    /// - Parameter remote: The configured git remote name.
+    /// - Returns: `true` when a remote ledger was fetched and merged, or `false`
+    ///   when the remote does not have an attestation ledger yet.
+    @discardableResult
+    public func fetch(remote: String = "origin") throws -> Bool {
+        let remoteRef = "refs/notes/\(Self.ref)"
+        let existingRef = try run(["ls-remote", remote, remoteRef])
+        guard !existingRef.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+
+        let temporaryRef = "refs/notes/attest-fetch-\(UUID().uuidString)"
+        defer { _ = try? run(["update-ref", "-d", temporaryRef], allowFailure: true) }
+
+        try run([
+            "fetch",
+            remote,
+            "\(remoteRef):\(temporaryRef)",
+        ])
+        try run([
+            "notes",
+            "--ref=\(Self.ref)",
+            "merge",
+            "-s",
+            "cat_sort_uniq",
+            temporaryRef,
+        ])
+        return true
+    }
+
     // MARK: - Process
 
     @discardableResult

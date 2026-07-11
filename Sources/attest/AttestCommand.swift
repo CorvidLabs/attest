@@ -17,7 +17,16 @@ struct AttestCommand: AsyncParsableCommand {
         and agent loops gate on the recorded trust.
         """,
         version: "1.0.0",
-        subcommands: [Sign.self, Forward.self, Verify.self, Log.self, Export.self, Keygen.self],
+        subcommands: [
+            Sign.self,
+            Forward.self,
+            Verify.self,
+            Log.self,
+            Export.self,
+            Keygen.self,
+            PushLedger.self,
+            FetchLedger.self,
+        ],
         defaultSubcommand: Log.self
     )
 }
@@ -40,6 +49,47 @@ struct RepoOptions: ParsableArguments {
         let store = NotesStore(path: path)
         try store.validate()
         return store
+    }
+}
+
+// MARK: - Ledger synchronization
+
+internal struct PushLedger: AsyncParsableCommand {
+    internal static let configuration = CommandConfiguration(
+        commandName: "push",
+        abstract: "Push refs/notes/attest to a git remote."
+    )
+
+    @OptionGroup internal var repo: RepoOptions
+
+    @Option(name: .long, help: "The configured git remote name.")
+    internal var remote: String = "origin"
+
+    internal func run() async throws {
+        let store = try repo.makeStore()
+        try store.push(remote: remote)
+        print("Pushed refs/notes/attest to \(remote).")
+    }
+}
+
+internal struct FetchLedger: AsyncParsableCommand {
+    internal static let configuration = CommandConfiguration(
+        commandName: "fetch",
+        abstract: "Fetch and merge refs/notes/attest from a git remote."
+    )
+
+    @OptionGroup internal var repo: RepoOptions
+
+    @Option(name: .long, help: "The configured git remote name.")
+    internal var remote: String = "origin"
+
+    internal func run() async throws {
+        let store = try repo.makeStore()
+        if try store.fetch(remote: remote) {
+            print("Fetched and merged refs/notes/attest from \(remote).")
+        } else {
+            print("Remote ledger refs/notes/attest does not exist on \(remote). Nothing to fetch.")
+        }
     }
 }
 

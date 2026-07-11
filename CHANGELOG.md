@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `attest push` publishes `refs/notes/attest` to a configurable git remote without forcing.
+- `attest fetch` fetches the remote ledger into a temporary ref and merges divergent notes with
+  `cat_sort_uniq`, preserving independently recorded provenance.
+
 ## [v0.5.0] - 2026-06-24
 
 ### Other
