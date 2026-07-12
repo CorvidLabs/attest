@@ -32,12 +32,12 @@ Install a compatible Attest release, optionally forward reviewed provenance to a
 | `inputs.forward-reviewer` | Reviewer identity recorded during forwarding. |
 | `inputs.forward-sign` | Whether forwarded provenance is signed. |
 | `inputs.working-directory` | Governed repository directory. |
-| `inputs.version` | Exact, major-channel, or latest Attest release selector. |
+| `inputs.version` | Exact release tag or `latest` Attest release selector. |
 | `outputs.binary` | Absolute path to the installed Attest executable. |
 
 ## Invariants
 
-1. An explicit version wins; a major channel resolves only within that major release line.
+1. An explicit version wins; moving major-channel resolution applies only when the action itself is referenced by a major tag such as `@v1`.
 2. A downloaded binary is checked against its published SHA-256 sidecar when one exists.
 3. Missing compatible assets fall back to building from the action checkout, never the consumer repository.
 4. Provenance forwarding occurs only when `forward-from` is non-empty and always precedes verification.
