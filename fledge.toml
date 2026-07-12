@@ -21,3 +21,7 @@ description = "Build a release binary and install it to /usr/local/bin"
 [tasks.examples]
 cmd = "for f in examples/*.sh; do echo \"== $f ==\"; sh \"$f\" || exit 1; done"
 description = "Run the runnable example scripts against throwaway repos"
+
+[lanes.verify]
+description = "Build, test, and validate Attest contracts"
+steps = ["build", "test", "spec"]

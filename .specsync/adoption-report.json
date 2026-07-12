@@ -1,0 +1,15 @@
+{
+  "bootstrap_policy": {
+    "base_commit": "a738ac9f76e5c389ca9a43d46f4ebba3ee4f650e",
+    "digest": "16afa823c877e65c7259ac93080ecf637088b8bb8cf8e6886340a952339d8ece",
+    "path": ".specsync/sdd.json"
+  },
+  "generated_at": 1783830416,
+  "requirements_needing_ids": [
+    {
+      "action": "review and assign one stable ID per durable requirement",
+      "path": "specs/provenance-ledger/requirements.md",
+      "suggested_first_id": "REQ-provenance-ledger-001"
+    }
+  ]
+}
