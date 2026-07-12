@@ -1,0 +1,18 @@
+{
+  "approvals": [
+    {
+      "gate": "definition",
+      "actor": "codex",
+      "timestamp": 1783865845,
+      "digest": "7091e1b5d85aa04b8f5fec9446dc8945b91bbb31568cc06a5f126a2c5d23b650",
+      "note": "Repository interview approved a focused stable action contract."
+    },
+    {
+      "gate": "definition",
+      "actor": "codex",
+      "timestamp": 1783865958,
+      "digest": "abb1ec35396da9cb77e20b1dde292d181cdb332264858a5d01a1cfc16564dcae",
+      "note": "Re-approved after completing direct evidence and validation tasks."
+    }
+  ]
+}

@@ -3,3 +3,4 @@ name = "attest"
 
 [specs]
 provenance-ledger = "specs/provenance-ledger/provenance-ledger.spec.md"
+attest-action = "specs/attest-action/attest-action.spec.md"
