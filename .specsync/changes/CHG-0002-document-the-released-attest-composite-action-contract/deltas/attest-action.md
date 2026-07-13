@@ -1,4 +1,4 @@
-## ADDED
+## MODIFIED
 
 ### REQUIREMENT REQ-attest-action-001
 
