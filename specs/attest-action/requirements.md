@@ -27,3 +27,4 @@ The Attest action SHALL expose the installed binary path and fail closed when in
 Acceptance Criteria
 
 - The `binary` output names an executable, and fatal action paths return a non-zero status.
+
