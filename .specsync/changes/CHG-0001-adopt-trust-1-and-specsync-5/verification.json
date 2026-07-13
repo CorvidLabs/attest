@@ -1,0 +1,21 @@
+{
+  "timestamp": 1783911902,
+  "commit": "12fb30ffb307e31bd446f00e6a5109b00bbf3cab",
+  "contract_digest": "555363fd1ef44ddfe6ae69c22aa740ec062e223483048a877169ddb38928e308",
+  "workspace_digest": "ad0ec45eab870b867e7c4fe8f96f30eb47e6a059be62fb590bf2a6dc8394ff92",
+  "acceptance_input_digest": "8f1c516913f19ac7d78f3dfdc06f894e61fcdae33290e5c0a2491fda50955f48",
+  "passed": true,
+  "commands": [
+    {
+      "command": "swift test",
+      "success": true,
+      "exit_code": 0
+    },
+    {
+      "command": "bash Tests/action_contract_test.sh",
+      "success": true,
+      "exit_code": 0
+    }
+  ],
+  "requirement_ids": []
+}

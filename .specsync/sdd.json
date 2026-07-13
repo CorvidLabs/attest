@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "enabled": true,
+  "require_change_for_meaningful_files": true,
+  "meaningful_paths": [
+    "Sources/",
+    "Tests/",
+    "specs/",
+    "README.md",
+    "AGENTS.md",
+    ".claude/",
+    ".codex/",
+    ".cursor/",
+    ".gemini/",
+    ".github/",
+    "action.yml",
+    "Package.swift",
+    "Package.resolved",
+    "fledge.toml",
+    ".trust.toml",
+    ".augur.toml",
+    ".attest.json",
+    ".specsync/sdd.json",
+    ".specsync/config.toml",
+    ".specsync/version"
+  ],
+  "ignored_paths": [
+    ".specsync/changes/"
+  ],
+  "verification_commands": [
+    "swift test",
+    "bash Tests/action_contract_test.sh"
+  ],
+  "custom_artifacts": {},
+  "principles_file": null
+}

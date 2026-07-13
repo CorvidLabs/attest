@@ -172,6 +172,8 @@ jobs:
       - run: swift test
 
   smoke-test-action:
+    # Direct SDD evidence: REQ-attest-action-001, REQ-attest-action-002,
+    # and REQ-attest-action-003 are exercised through the released composite wiring.
     # Dogfood the bundled composite action (`uses: ./`) end to end: install →
     # checksum → verify. The other jobs invoke attest via .build/release
     # directly, so action.yml's own wiring (binary install, sha verification,
@@ -194,6 +196,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # the action's range needs history
+      - name: Validate the action contract
+        run: bash Tests/action_contract_test.sh
       - name: Run the bundled action against this checkout
         id: attest
         uses: ./
@@ -205,8 +209,13 @@ jobs:
       - name: Assert the action installed attest
         env:
           BINARY: ${{ steps.attest.outputs.binary }}
+          OUTCOME: ${{ steps.attest.outcome }}
         run: |
           set -euo pipefail
+          if [ "$OUTCOME" != "success" ]; then
+            echo "::error::The bundled action completed with outcome: $OUTCOME"
+            exit 1
+          fi
           if [ -z "$BINARY" ] || [ ! -x "$BINARY" ]; then
             echo "::error::The action did not install a runnable attest — install wiring is broken."
             exit 1
