@@ -13,6 +13,20 @@
       "timestamp": 1783909091,
       "digest": "c4d7860b5b6ebb692723b137fbedb15afb4491b97c512e43b2f050f227620b45",
       "note": "Approved the replay-safe action-contract delta and final review-driven verification coverage fixes."
+    },
+    {
+      "gate": "definition",
+      "actor": "0xLeif",
+      "timestamp": 1783911762,
+      "digest": "f4663e154e9dec25affbdb83684ef100f93146963908167a47a79f988fb8e9e5",
+      "note": "Approved the final testing instructions, action-smoke outcome assertion, and narrowed lifecycle-policy ignore scope."
+    },
+    {
+      "gate": "acceptance",
+      "actor": "0xLeif",
+      "timestamp": 1783911873,
+      "digest": "dfc1cd9c331794342dd9502eff7eb2b34d6273bf72ab9f216db9a77ae70996c4",
+      "note": "Accepted after fresh verification of the action-smoke outcome assertion, narrowed lifecycle ignore, and corrected testing instructions."
     }
   ]
 }
