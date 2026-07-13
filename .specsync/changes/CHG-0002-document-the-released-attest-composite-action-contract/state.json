@@ -5,10 +5,10 @@
   "title": "Document the released Attest composite action contract",
   "description": "Document the released Attest composite action contract",
   "kind": "documentation",
-  "state": "implementing",
+  "state": "accepted",
   "base_commit": "a738ac9f76e5c389ca9a43d46f4ebba3ee4f650e",
   "created_at": 1783865644,
-  "updated_at": 1783909140,
+  "updated_at": 1783910335,
   "affected_specs": [
     "attest-action"
   ],
