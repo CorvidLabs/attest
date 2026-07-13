@@ -25,7 +25,7 @@
     ".specsync/version"
   ],
   "ignored_paths": [
-    ".specsync/"
+    ".specsync/changes/"
   ],
   "verification_commands": [
     "swift test",

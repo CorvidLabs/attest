@@ -8,4 +8,4 @@ artifact: testing
 - `swift test`
 - Hosted `smoke-test-action` on `macos-latest` and `ubuntu-latest`
 - `specsync check --strict --require-coverage 100 --force`
-- `fledge trust verify`
+- `fledge lanes run verify`

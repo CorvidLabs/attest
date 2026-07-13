@@ -13,13 +13,6 @@
       "timestamp": 1783909091,
       "digest": "c4d7860b5b6ebb692723b137fbedb15afb4491b97c512e43b2f050f227620b45",
       "note": "Approved the replay-safe action-contract delta and final review-driven verification coverage fixes."
-    },
-    {
-      "gate": "acceptance",
-      "actor": "0xLeif",
-      "timestamp": 1783910335,
-      "digest": "8b2b002e457b9e08308b291b5bc4230ce9f069ae9be3c52a63f25b4c9ad5ee96",
-      "note": "Accepted after fresh verification that the required Trust lane runs the action contract and canonical specs remain lifecycle-governed."
     }
   ]
 }

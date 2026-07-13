@@ -13,13 +13,6 @@
       "timestamp": 1783903571,
       "digest": "555363fd1ef44ddfe6ae69c22aa740ec062e223483048a877169ddb38928e308",
       "note": "Reviewed Attest governance adoption after hosted native/action/CodeQL success and required trust branch protection."
-    },
-    {
-      "gate": "acceptance",
-      "actor": "0xLeif",
-      "timestamp": 1783910372,
-      "digest": "adbcd39b7727abd8970bf26baf78c78c815337b0873768507355e0ea12cd5cff",
-      "note": "Accepted after fresh verification of the final configured Trust lane, managed agent guidance, and canonical-spec lifecycle policy."
     }
   ]
 }

@@ -209,8 +209,13 @@ jobs:
       - name: Assert the action installed attest
         env:
           BINARY: ${{ steps.attest.outputs.binary }}
+          OUTCOME: ${{ steps.attest.outcome }}
         run: |
           set -euo pipefail
+          if [ "$OUTCOME" != "success" ]; then
+            echo "::error::The bundled action completed with outcome: $OUTCOME"
+            exit 1
+          fi
           if [ -z "$BINARY" ] || [ ! -x "$BINARY" ]; then
             echo "::error::The action did not install a runnable attest — install wiring is broken."
             exit 1
