@@ -1,6 +1,6 @@
 ---
 id: CHG-0002-document-the-released-attest-composite-action-contract
-state: verifying
+state: accepted
 type: documentation
 base_commit: a738ac9f76e5c389ca9a43d46f4ebba3ee4f650e
 ---

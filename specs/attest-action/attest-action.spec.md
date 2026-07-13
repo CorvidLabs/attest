@@ -1,6 +1,6 @@
 ---
 module: attest-action
-version: 2
+version: 3
 status: stable
 files:
   - action.yml
@@ -73,4 +73,5 @@ And the binary output names the executable used
 | Version | Date | Changes |
 | --- | --- | --- |
 | 1 | 2026-07-12 | Stable Attest action contract. |
+| 2026-07-13 | CHG-0002-document-the-released-attest-composite-action-contract: Document the released Attest composite action contract |
 | 2026-07-13 | CHG-0002-document-the-released-attest-composite-action-contract: Document the released Attest composite action contract |
