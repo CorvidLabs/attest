@@ -5,6 +5,12 @@
   "meaningful_paths": [
     "Sources/",
     "Tests/",
+    "README.md",
+    "AGENTS.md",
+    ".claude/",
+    ".codex/",
+    ".cursor/",
+    ".gemini/",
     ".github/",
     "action.yml",
     "Package.swift",
@@ -22,7 +28,8 @@
     "specs/"
   ],
   "verification_commands": [
-    "swift test"
+    "swift test",
+    "bash Tests/action_contract_test.sh"
   ],
   "custom_artifacts": {},
   "principles_file": null

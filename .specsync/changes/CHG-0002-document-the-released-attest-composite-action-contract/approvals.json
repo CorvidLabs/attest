@@ -6,13 +6,6 @@
       "timestamp": 1783903399,
       "digest": "226818144c72776a418d082a177824e0ea1cc390b5b1ad33f79e2136ae00af98",
       "note": "Reviewed accurate Attest composite-action contract metadata, three stable requirements, and direct macOS/Linux action evidence."
-    },
-    {
-      "gate": "acceptance",
-      "actor": "0xLeif",
-      "timestamp": 1783903457,
-      "digest": "6bcb589d4033fa2294fd49b33700a07609cc8f9ea307a5932abb124b8dc66d3a",
-      "note": "Approved after strict verification of the accurate three-requirement Attest action contract and 138 passing native tests."
     }
   ]
 }

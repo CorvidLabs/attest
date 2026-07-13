@@ -13,13 +13,6 @@
       "timestamp": 1783903571,
       "digest": "555363fd1ef44ddfe6ae69c22aa740ec062e223483048a877169ddb38928e308",
       "note": "Reviewed Attest governance adoption after hosted native/action/CodeQL success and required trust branch protection."
-    },
-    {
-      "gate": "acceptance",
-      "actor": "0xLeif",
-      "timestamp": 1783903596,
-      "digest": "26be4595eb40c413ca3b7d799274ae646c3a0b285ceb147687c9688cde451152",
-      "note": "Approved after strict adoption verification, 138 passing native tests, hosted technical success, and required trust branch protection."
     }
   ]
 }
