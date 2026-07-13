@@ -5,6 +5,7 @@
   "meaningful_paths": [
     "Sources/",
     "Tests/",
+    "specs/",
     "README.md",
     "AGENTS.md",
     ".claude/",
@@ -24,8 +25,7 @@
     ".specsync/version"
   ],
   "ignored_paths": [
-    ".specsync/",
-    "specs/"
+    ".specsync/"
   ],
   "verification_commands": [
     "swift test",
