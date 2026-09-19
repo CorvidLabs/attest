@@ -12,6 +12,8 @@ on:
       - 'fledge.toml'
       - '.github/workflows/**'
       - '.attest.json'
+      - 'INTENT.md'
+      - 'hi/**'
   pull_request:
     branches: [main]
     paths:
@@ -24,6 +26,8 @@ on:
       - 'fledge.toml'
       - '.github/workflows/**'
       - '.attest.json'
+      - 'INTENT.md'
+      - 'hi/**'
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -222,6 +226,24 @@ jobs:
           fi
           "$BINARY" --version
           echo "Action OK — binary=$BINARY"
+
+  intent-check:
+    # Structural gate on the intent record in INTENT.md + hi/. `hi check` catches
+    # only structural breakage -- a duplicate id, a case with no parent, an id
+    # colliding with a retired one, a malformed id, an undeclared family, a
+    # criterion stranded outside every section -- never unfinished intent. Kept as
+    # its own ubuntu job so compiling the Rust CLI never slows the macOS pipeline,
+    # and so a broken intent file is reported distinctly from a broken build.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install hi
+        run: cargo install human-intent --version 0.5.0 --locked
+      - name: Check the intent record for structural problems
+        run: hi check
 
   guard-no-self-hosted:
     # Security tripwire: this repo is PUBLIC, so a self-hosted runner would let a
