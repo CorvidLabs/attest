@@ -62,11 +62,14 @@ runs:
         INPUT_VERSION: ${{ inputs.version }}
         ACTION_REF: ${{ github.action_ref }}
         ACTION_PATH: ${{ github.action_path }}
-        ACTION_REPO: ${{ github.action_repository }}
+        # Never inherit github.action_repository when nested under another
+        # composite (e.g. Trust): that becomes CorvidLabs/trust and
+        # `gh release download` misses attest-linux-x86_64 → source build.
+        RELEASE_REPO: CorvidLabs/attest
       run: |
         set -euo pipefail
 
-        repo="${ACTION_REPO:-CorvidLabs/attest}"
+        repo="${RELEASE_REPO:-CorvidLabs/attest}"
 
         # Resolve which release to install, WITHOUT ever crossing a major
         # boundary. An explicit `version` wins; otherwise derive from the ref the
@@ -121,18 +124,31 @@ runs:
         tmp="$(mktemp -d)"
         bin=""
 
+        # Why the last download failed, kept so the fallback can say so. Nested
+        # Trust used to swallow gh stderr and report "no prebuilt" even when
+        # attest-linux-x86_64 existed on CorvidLabs/attest.
+        download_error=""
+
         download() {
           # Fetch $asset (+ sidecar) for the resolved release into $tmp. Returns
           # 0 only when the binary asset actually landed.
           rm -f "$tmp/$asset" "$tmp/$asset.sha256"
+          local err status
+          err="$tmp/gh-download.err"
           if [ "$mode" = "latest" ]; then
             gh release download --repo "$repo" \
               --pattern "$asset" --pattern "$asset.sha256" \
-              --dir "$tmp" --clobber 2>/dev/null || return 1
+              --dir "$tmp" --clobber 2>"$err"
           else
             gh release download "$target" --repo "$repo" \
               --pattern "$asset" --pattern "$asset.sha256" \
-              --dir "$tmp" --clobber 2>/dev/null || return 1
+              --dir "$tmp" --clobber 2>"$err"
+          fi
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            download_error="$(head -n 1 "$err" 2>/dev/null)"
+            [ -s "$err" ] && sed 's/^/  /' "$err"
+            return 1
           fi
           [ -f "$tmp/$asset" ]
         }
@@ -165,14 +181,22 @@ runs:
         # tree) when no prebuilt binary fits this runner. Needs a Swift toolchain.
         if [ -z "$bin" ]; then
           if command -v swift >/dev/null 2>&1; then
-            echo "::warning::No prebuilt attest for $os/$arch; building from source. Use a supported runner (macOS or Linux x86_64) to skip this."
+            if [ -n "$download_error" ]; then
+              echo "::warning::Could not download the prebuilt attest for $os/$arch, so it is being built from source. The download failed with: ${download_error}"
+            else
+              echo "::warning::No prebuilt attest for $os/$arch; building from source. Use a supported runner (macOS or Linux x86_64) to skip this."
+            fi
             swift build -c release --package-path "$ACTION_PATH"
             # Ask SwiftPM for the bin dir rather than hardcoding .build/release
             # (mirrors release.yml; --show-bin-path only prints, never rebuilds).
             bindir="$(swift build -c release --package-path "$ACTION_PATH" --show-bin-path)"
             bin="$bindir/attest"
           else
-            echo "::error::No prebuilt attest binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
+            if [ -n "$download_error" ]; then
+              echo "::error::Could not download the prebuilt attest for $os/$arch, and there is no Swift toolchain to build one. The download failed with: ${download_error}"
+            else
+              echo "::error::No prebuilt attest binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
+            fi
             exit 1
           fi
         fi

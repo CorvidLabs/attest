@@ -28,3 +28,11 @@ Acceptance Criteria
 
 - The `binary` output names an executable, and fatal action paths return a non-zero status.
 
+### REQ-attest-action-004
+
+The Attest action SHALL download release assets from `CorvidLabs/attest` even when nested under another composite action.
+
+Acceptance Criteria
+
+- The install step hardcodes `RELEASE_REPO: CorvidLabs/attest` and does not inherit `github.action_repository`.
+

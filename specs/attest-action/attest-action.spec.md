@@ -1,6 +1,6 @@
 ---
 module: attest-action
-version: 5
+version: 6
 status: stable
 files:
   - action.yml
@@ -42,6 +42,7 @@ Install a compatible Attest release, optionally forward reviewed provenance to a
 3. Missing compatible assets fall back to building from the action checkout, never the consumer repository.
 4. Provenance forwarding occurs only when `forward-from` is non-empty and always precedes verification.
 5. Installation, checksum, forwarding, and policy failures propagate as action failures.
+6. Release-asset downloads always use `CorvidLabs/attest`, even when this action is nested under another composite whose `github.action_repository` is not Attest.
 
 ## Behavioral Examples
 
@@ -73,6 +74,7 @@ And the binary output names the executable used
 | Version | Date | Changes |
 | --- | --- | --- |
 | 1 | 2026-07-12 | Stable Attest action contract. |
+| 6 | 2026-09-20 | Download Linux and macOS prebuilts from CorvidLabs/attest even when nested under Trust. |
 | 2026-07-13 | CHG-0002-document-the-released-attest-composite-action-contract: Document the released Attest composite action contract |
 | 2026-07-13 | CHG-0002-document-the-released-attest-composite-action-contract: Document the released Attest composite action contract |
 | 2026-07-13 | CHG-0002-document-the-released-attest-composite-action-contract: Document the released Attest composite action contract |
