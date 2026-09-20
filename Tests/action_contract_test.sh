@@ -23,5 +23,7 @@ require 'value: ${{ steps.install.outputs.binary }}'
 require '"$ATTEST" "${forward_args[@]}"'
 require '"$ATTEST" verify --range "$RANGE" --policy "$POLICY"'
 require "checksum mismatch"
+require "RELEASE_REPO: CorvidLabs/attest"
+require 'repo="${RELEASE_REPO:-CorvidLabs/attest}"'
 
 echo "attest action contract passed"
